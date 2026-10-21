@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 use rstest::rstest;
 
-use super::{Header, Hit, Hits, Row, RowKind, Sort, View, ViewTab, render};
+use super::{ContextView, Header, Hit, Hits, Row, RowKind, Sort, View, ViewTab, render};
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const MIB: u64 = 1024 * 1024;
@@ -54,6 +54,7 @@ fn sample_view() -> View {
         selected: Some(8),
         sort: Sort::Memory,
         header: Header { memory: Some(6 * GIB + 120 * MIB), cpu: Some(314.0), error: None },
+        context: ContextView::default(),
     }
 }
 
@@ -64,7 +65,7 @@ fn draw(view: &View, width: u16, height: u16) -> (Buffer, Hits) {
     (terminal.backend().buffer().clone(), hits)
 }
 
-fn line(buffer: &Buffer, y: u16) -> String {
+pub(super) fn line(buffer: &Buffer, y: u16) -> String {
     (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect()
 }
 
@@ -100,7 +101,7 @@ mod layout {
     fn the_context_tab_draws_no_process_rows() {
         let view = View { tab: ViewTab::Context, ..sample_view() };
         let (buffer, hits) = draw(&view, 100, 20);
-        assert!((1..20).all(|y| line(&buffer, y).trim().is_empty()));
+        assert!((2..20).all(|y| line(&buffer, y).trim().is_empty()));
         assert_eq!(hits.at(5, 2), None);
     }
 

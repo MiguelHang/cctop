@@ -15,7 +15,6 @@ pub(crate) struct Session {
     cwd: PathBuf,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the app reads each claude's environment, task 012"))]
 pub(crate) fn config_dir(env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     absolute(&env, CONFIG_ENV).or_else(|| absolute(&env, "HOME").map(|home| home.join(".claude")))
 }

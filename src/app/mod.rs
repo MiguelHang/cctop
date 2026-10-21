@@ -1,3 +1,4 @@
+mod context;
 mod input;
 mod sampler;
 mod state;
@@ -5,7 +6,7 @@ mod terminal;
 mod view;
 
 use std::io;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use ratatui::backend::Backend;
@@ -19,10 +20,11 @@ use terminal::{Crossterm, Events, Screen};
 use view::Line;
 
 use crate::config::{self, Loaded};
+use crate::context::Sessions;
 use crate::cornercase::{Client, CommandRunner};
 use crate::error::Result;
 use crate::procs;
-use crate::ui::{self, Header, Hits, View};
+use crate::ui::{self, ContextView, Header, Hits, View};
 use crate::usage::{self, Tree};
 
 const POLL: Duration = Duration::from_millis(250);
@@ -31,10 +33,12 @@ const STALE_MIN: Duration = Duration::from_secs(5);
 
 pub(crate) fn run_tui() -> Result<()> {
     let Loaded { config, warnings } = config::load_system();
-    let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system());
+    let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system())
+        .with_contexts(Sessions::default(), std::env::var_os("HOME"));
     let running = sampler::spawn(sampler, config.interval);
     let mut app = App::new(Some(state::from_config(config.sort)), config.interval, Instant::now());
     app.notice = warnings.into_iter().next();
+    app.panes = Some(running.panes);
     let mut screen = Screen::enter()?;
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
 }
@@ -73,6 +77,8 @@ pub(crate) struct App {
     notice: Option<String>,
     interval: Duration,
     answered: Instant,
+    panes: Option<Sender<Option<u64>>>,
+    asked: Option<u64>,
 }
 
 impl App {
@@ -87,6 +93,8 @@ impl App {
             notice: None,
             interval,
             answered: now,
+            panes: None,
+            asked: None,
         }
     }
 
@@ -100,6 +108,7 @@ impl App {
             }
             Err(error) => self.error = Some(error),
         }
+        self.ask_context();
     }
 
     fn check_stale(&mut self, now: Instant) {
@@ -120,7 +129,26 @@ impl App {
         } else {
             self.rebuild();
         }
+        self.ask_context();
         flow
+    }
+
+    fn ask_context(&mut self) {
+        let pane = self.state.pane();
+        if pane == self.asked {
+            return;
+        }
+        self.asked = pane;
+        self.state.context_scroll = 0;
+        if let Some(panes) = &self.panes {
+            let _ = panes.send(pane);
+        }
+    }
+
+    fn context_view(&self) -> ContextView {
+        let pane = self.state.pane().and_then(|id| context::pane_node(&self.tree, id));
+        let found = self.reading.as_ref().and_then(|reading| reading.context.as_ref());
+        context::view(pane, found, self.state.context_scroll)
     }
 
     fn rebuild(&mut self) {
@@ -140,12 +168,14 @@ impl App {
     fn view(&self) -> View {
         let error = self.error.clone().or_else(|| self.notice.clone());
         let header = Header { memory: self.tree.totals.memory, cpu: self.tree.totals.cpu, error };
-        view::view(&self.state, &self.lines, header)
+        view::view(&self.state, &self.lines, header, self.context_view())
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
         self.state.page = usize::from(frame.area().height.saturating_sub(2)).max(1);
         self.state.reconcile(&self.lines);
+        let most = ui::context_scroll_max(&self.context_view(), frame.area().height);
+        self.state.context_scroll = self.state.context_scroll.min(most);
         self.hits = ui::render(frame, &self.view());
     }
 }

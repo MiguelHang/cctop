@@ -64,17 +64,22 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
 
 fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) {
     if state.tab != ViewTab::Processes {
-        if let (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) =
-            (mouse.kind, hits.at(mouse.column, mouse.row))
-        {
-            state.tab = tab;
-        }
+        context_mouse(state, hits, mouse);
         return;
     }
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => click(state, lines, hits.at(mouse.column, mouse.row)),
         MouseEventKind::ScrollDown => state.scroll_by(lines, WHEEL),
         MouseEventKind::ScrollUp => state.scroll_by(lines, -WHEEL),
+        _ => {}
+    }
+}
+
+fn context_mouse(state: &mut State, hits: &Hits, mouse: MouseEvent) {
+    match (mouse.kind, hits.at(mouse.column, mouse.row)) {
+        (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) => state.tab = tab,
+        (MouseEventKind::ScrollDown, _) => state.context_scroll = state.context_scroll.saturating_add_signed(WHEEL),
+        (MouseEventKind::ScrollUp, _) => state.context_scroll = state.context_scroll.saturating_add_signed(-WHEEL),
         _ => {}
     }
 }

@@ -22,7 +22,7 @@ fn transcript_path(config: &Path, id: &str) -> PathBuf {
     config.join("projects").join("-repo").join(format!("{id}.jsonl"))
 }
 
-fn start(config: &Path, pid: u32, id: &str, transcript: &str) {
+pub(crate) fn start(config: &Path, pid: u32, id: &str, transcript: &str) {
     let sessions = config.join("sessions");
     let project = config.join("projects").join("-repo");
     fs::create_dir_all(&sessions).expect("create sessions folder");

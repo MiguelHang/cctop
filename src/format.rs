@@ -23,6 +23,30 @@ pub(crate) fn percent(value: f64) -> String {
     if value < 10.0 { format!("{value:.1}%") } else { format!("{value:.0}%") }
 }
 
+#[expect(clippy::cast_precision_loss, reason = "token counts are shown with one decimal at most")]
+pub(crate) fn tokens(value: u64) -> String {
+    let amount = value as f64;
+    match value {
+        0..1_000 => value.to_string(),
+        1_000..100_000 => format!("{:.1}k", amount / 1e3),
+        100_000..1_000_000 => format!("{:.0}k", amount / 1e3),
+        _ if value.is_multiple_of(1_000_000) => format!("{}M", value / 1_000_000),
+        _ => format!("{:.1}M", amount / 1e6),
+    }
+}
+
+pub(crate) fn thousands(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::new();
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
+}
+
 pub(crate) fn or_missing<T>(value: Option<T>, show: impl FnOnce(T) -> String) -> String {
     value.map_or_else(|| MISSING.to_owned(), show)
 }

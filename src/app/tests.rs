@@ -7,6 +7,7 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use super::context::{Found, PaneContext};
 use super::sampler::{Reading, Sampler};
 use super::state::RowId;
 use super::terminal::Events;
@@ -17,10 +18,10 @@ use crate::error::Result;
 use crate::procs::fake::FakeSource;
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::fixture;
-use crate::ui::{Sort, ViewTab};
+use crate::ui::{ContextView, Sort, ViewTab};
 use crate::usage;
 
-const STATUS: &str = fixture!("cornercase/status-0.12.173.json");
+pub(super) const STATUS: &str = fixture!("cornercase/status-0.12.173.json");
 const BOOT: &str = "4242-1700000000000000000";
 const MB: u64 = 1_000_000;
 const INTERVAL: Duration = Duration::from_secs(2);
@@ -68,7 +69,7 @@ pub(super) fn fake_sampler() -> Sampler<FakeRunner, FakeSource> {
 
 fn reading(sample: Sample) -> Reading {
     let snapshot = Snapshot::parse(STATUS).expect("parse the status fixture");
-    Reading { snapshot, sample, cpu: std::collections::HashMap::new() }
+    Reading { snapshot, sample, cpu: std::collections::HashMap::new(), context: None }
 }
 
 fn app_with(sample: Sample, sort: Option<usage::Sort>) -> App {
@@ -293,6 +294,64 @@ mod mouse_and_keys {
         let (x, y) = find(&draw(&mut app, 100, 8), "Processes ");
         app.handle(&click(x, y));
         assert_eq!(app.view().tab, ViewTab::Processes);
+    }
+}
+
+mod context_view {
+    use super::*;
+
+    fn with_context(sample: Sample, context: PaneContext) -> App {
+        let mut app = App::new(None, INTERVAL, Instant::now());
+        app.update(Ok(Reading { context: Some(context), ..reading(sample) }), Instant::now());
+        app
+    }
+
+    fn select(app: &mut App, id: RowId) {
+        let index = index_of(app, id);
+        app.state.select(&app.lines, index);
+        app.handle(&Event::FocusGained);
+    }
+
+    #[test]
+    fn selecting_a_row_asks_the_sampler_for_its_pane_once() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (panes, asked) = mpsc::channel();
+        app.panes = Some(panes);
+        select(&mut app, RowId::Pane(2));
+        select(&mut app, RowId::Process { pane: 2, pid: 201 });
+        select(&mut app, RowId::Pane(1));
+        select(&mut app, RowId::Project(1));
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(2), Some(1), None]);
+    }
+
+    #[test]
+    fn shows_the_selected_pane_and_processes_keeps_the_selection() {
+        let mut app = with_context(first_sample(Instant::now()), PaneContext { pane: 2, found: Found::NoClaude });
+        select(&mut app, RowId::Pane(2));
+        app.handle(&key(KeyCode::Tab));
+        assert_eq!(app.view().context, ContextView::NoClaude { pane: "%2 cargo".to_owned() });
+        select(&mut app, RowId::Pane(1));
+        assert_eq!(app.view().context, ContextView::Reading { pane: "%1 claude".to_owned() });
+        app.handle(&key(KeyCode::Tab));
+        assert_eq!(app.view().tab, ViewTab::Processes);
+        assert_eq!(app.state.selected, Some(RowId::Pane(1)));
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_breakdown_up_to_its_end() {
+        let breakdown =
+            crate::context::breakdown::Breakdown { total: Some(10), fixed: Vec::new(), dynamic: Vec::new() };
+        let mut app =
+            with_context(first_sample(Instant::now()), PaneContext { pane: 1, found: Found::Session(101, breakdown) });
+        select(&mut app, RowId::Pane(1));
+        app.handle(&key(KeyCode::Tab));
+        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 8));
+        assert_eq!(app.state.context_scroll, 3);
+        draw(&mut app, 100, 8);
+        assert_eq!(app.state.context_scroll, 3);
+        draw(&mut app, 100, 30);
+        assert_eq!(app.state.context_scroll, 0);
+        assert_eq!(app.state.selected, Some(RowId::Pane(1)));
     }
 }
 

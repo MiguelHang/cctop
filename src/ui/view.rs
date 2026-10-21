@@ -56,4 +56,47 @@ pub(crate) struct View {
     pub(crate) selected: Option<usize>,
     pub(crate) sort: Sort,
     pub(crate) header: Header,
+    pub(crate) context: ContextView,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) enum ContextView {
+    #[default]
+    NoPane,
+    Reading {
+        pane: String,
+    },
+    NoClaude {
+        pane: String,
+    },
+    NoSession {
+        pane: String,
+        pid: u32,
+    },
+    Session(ContextSession),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct ContextSession {
+    pub(crate) pane: String,
+    pub(crate) pid: u32,
+    pub(crate) total: Option<u64>,
+    pub(crate) percent: Option<ContextPercent>,
+    pub(crate) fixed: Vec<ContextPart>,
+    pub(crate) dynamic: Vec<ContextPart>,
+    pub(crate) scroll: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub(crate) struct ContextPercent {
+    pub(crate) used: f64,
+    pub(crate) window: u64,
+    pub(crate) cornercase: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct ContextPart {
+    pub(crate) label: String,
+    pub(crate) tokens: u64,
+    pub(crate) path: bool,
 }

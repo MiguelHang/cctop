@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::state::{RowId, State, column};
-use crate::ui::{Header, Row, RowKind, View};
+use crate::ui::{ContextView, Header, Row, RowKind, View};
 use crate::usage::{PaneNode, ProcessNode, ProjectNode, TabNode, Totals, Tree, WorkspaceNode};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,7 +16,7 @@ pub(super) fn lines(tree: &Tree, folded: &HashSet<RowId>) -> Vec<Line> {
     flat.lines
 }
 
-pub(super) fn view(state: &State, lines: &[Line], header: Header) -> View {
+pub(super) fn view(state: &State, lines: &[Line], header: Header, context: ContextView) -> View {
     View {
         tab: state.tab,
         rows: lines.iter().map(|line| line.row.clone()).collect(),
@@ -24,6 +24,7 @@ pub(super) fn view(state: &State, lines: &[Line], header: Header) -> View {
         selected: state.index(lines),
         sort: column(state.sort),
         header,
+        context,
     }
 }
 
@@ -104,7 +105,7 @@ fn workspace_label(workspace: &WorkspaceNode) -> String {
     if workspace.worktree { format!("{name} (worktree)") } else { name }
 }
 
-fn pane_label(pane: &PaneNode) -> String {
+pub(super) fn pane_label(pane: &PaneNode) -> String {
     match pane.command.as_ref().or(pane.agent.as_ref()) {
         Some(program) => format!("%{} {program}", pane.id),
         None => format!("%{}", pane.id),
