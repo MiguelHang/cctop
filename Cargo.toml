@@ -15,9 +15,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+ratatui = "0.30.2"
 thiserror = "2.0.21"
 
 [dev-dependencies]
+insta = "1.49.0"
 rstest = "0.27.0"
 
 [lints.rust]

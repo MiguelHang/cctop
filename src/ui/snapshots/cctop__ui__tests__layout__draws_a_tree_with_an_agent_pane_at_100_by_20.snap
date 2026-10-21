@@ -1,0 +1,24 @@
+---
+source: src/ui/tests.rs
+expression: terminal.backend()
+---
+" Processes  Context                                                            mem 6.1 GB  cpu 314% "
+"Name                                                     Memory ▼    CPU Agent    Status     Context"
+"▾ cctop                                                    6.0 GB   1.5%                            "
+"  ▸ main                                                   300 MB   1.5%                            "
+"  ▾ task/009-ui-processes-view (worktree)                  5.0 GB   1.5%                            "
+"    ▾ build                                                5.0 GB   1.5%                            "
+"      ▾ %3 claude                                          5.0 GB   312% claude   working        42%"
+"        ▾ zsh                                              4.0 MB   1.5%                            "
+"          ▾ claude                                         700 MB   1.5%                            "
+"              cargo test --locked                          4.0 GB   1.5%                            "
+"              rust-analyzer                               ≈200 MB      —                            "
+"▸ notes                                                    120 MB   1.5%                            "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
+"                                                                                                    "
