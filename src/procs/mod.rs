@@ -4,10 +4,17 @@ use std::time::{Duration, Instant};
 
 use crate::error::Result;
 
+mod environ;
 #[cfg(test)]
 pub(crate) mod fake;
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;
+#[cfg(target_os = "macos")]
+pub(crate) mod macos;
+#[cfg(test)]
+mod probe;
+#[cfg(any(target_os = "macos", test))]
+mod procargs;
 
 pub(crate) type Pid = u32;
 

@@ -1,21 +1,14 @@
 use std::fs;
-use std::path::PathBuf;
-use std::process::{Child, Command};
 use std::time::Duration;
 
 use rstest::rstest;
 
-use super::{Env, LinuxSource, Stat, Status, parse_cmdline, parse_environ, parse_stat, parse_status};
-use crate::procs::{Pid, Process, ProcessSource};
-use crate::test_util::{TempDir, fixture, wait_until};
+use super::{LinuxSource, Stat, Status, parse_cmdline, parse_stat, parse_status};
+use crate::procs::ProcessSource;
+use crate::procs::probe::own_process;
+use crate::test_util::{TempDir, fixture};
 
-const MIB: u64 = 1024 * 1024;
 const MEMORY_PROBE: &str = "procs::linux::tests::real_proc::memory_probe";
-const MEMORY_PROBE_VARIABLE: &str = "CCTOP_MEMORY_PROBE";
-
-fn own_process(source: &LinuxSource, pid: Pid) -> Option<Process> {
-    source.sample().expect("sample /proc").processes.into_iter().find(|process| process.pid == pid)
-}
 
 mod status {
     use super::*;
@@ -74,30 +67,6 @@ mod cmdline {
     #[case::invalid_utf8(b"a\xff\x00", &["a\u{fffd}"])]
     fn splits_on_nul(#[case] bytes: &[u8], #[case] expected: &[&str]) {
         assert_eq!(parse_cmdline(bytes), expected);
-    }
-}
-
-mod environ {
-    use super::*;
-
-    #[test]
-    fn keeps_only_the_cornercase_and_claude_variables() {
-        let expected = Env {
-            pane: Some(7),
-            server: Some("x-1".to_owned()),
-            claude_config_dir: Some(PathBuf::from("/home/user/.claude-work")),
-        };
-        assert_eq!(parse_environ(fixture!("proc/environ").as_bytes()), expected);
-    }
-
-    #[rstest]
-    #[case::empty(b"")]
-    #[case::cut_in_a_name(b"HOME=/h\0CORNERCASE_PA")]
-    #[case::empty_values(b"CORNERCASE_PANE=\0CORNERCASE_SERVER=\0CLAUDE_CONFIG_DIR=\0")]
-    #[case::pane_not_a_number(b"CORNERCASE_PANE=seven\0")]
-    #[case::no_equals_sign(b"CORNERCASE_SERVER\0")]
-    fn leaves_what_is_missing_as_none(#[case] bytes: &[u8]) {
-        assert_eq!(parse_environ(bytes), Env::default());
     }
 }
 
@@ -172,121 +141,31 @@ mod fake_proc {
 
 mod real_proc {
     use super::*;
-
-    struct Reaped(Child);
-
-    impl Drop for Reaped {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
-        }
-    }
+    use crate::procs::probe;
 
     #[test]
     fn lists_the_test_process_with_its_parent_and_name() {
-        let source = LinuxSource::new();
-        let process = own_process(&source, std::process::id()).expect("own process listed");
-        assert_eq!(process.ppid, Some(std::os::unix::process::parent_id()));
-        assert!(process.name.starts_with("cctop"), "{}", process.name);
-        assert_eq!(process.args.first(), std::env::args().next().as_ref());
-        assert!(process.memory.is_some());
+        probe::lists_the_test_process(&LinuxSource::new());
     }
 
     #[test]
     fn reads_the_cornercase_variables_of_a_child() {
-        let child = Command::new("/bin/sleep")
-            .arg("30")
-            .env("CORNERCASE_PANE", "7")
-            .env("CORNERCASE_SERVER", "x-1")
-            .spawn()
-            .expect("spawn sleep");
-        let child = Reaped(child);
-        let source = LinuxSource::new();
-        let mut found = None;
-        wait_until("the child runs sleep", || {
-            found = own_process(&source, child.0.id()).filter(|process| process.name == "sleep");
-            found.is_some()
-        });
-        let process = found.expect("child listed");
-        assert_eq!((process.pane, process.server.as_deref()), (Some(7), Some("x-1")));
-        assert_eq!(process.ppid, Some(std::process::id()));
+        probe::reads_the_variables_of_a_child(&LinuxSource::new());
+    }
+
+    #[test]
+    fn shows_cpu_after_spinning() {
+        probe::shows_cpu_after_spinning(&LinuxSource::new());
     }
 
     #[test]
     fn counts_anonymous_memory_but_not_a_mapped_file() {
-        let output = Command::new(std::env::current_exe().expect("test binary"))
-            .args([MEMORY_PROBE, "--exact", "--ignored", "--test-threads=1"])
-            .env(MEMORY_PROBE_VARIABLE, "1")
-            .output()
-            .expect("run the memory probe");
-        let report = String::from_utf8_lossy(&output.stdout);
-        assert!(output.status.success(), "{report}");
-        assert!(report.contains("1 passed"), "{report}");
+        probe::run_the_memory_probe_alone(MEMORY_PROBE);
     }
 
     #[test]
     #[ignore = "run alone in its own process by counts_anonymous_memory_but_not_a_mapped_file"]
     fn memory_probe() {
-        if std::env::var_os(MEMORY_PROBE_VARIABLE).is_none() {
-            return;
-        }
-        let source = LinuxSource::new();
-        let memory = || own_process(&source, std::process::id()).and_then(|p| p.memory).expect("own memory");
-        let before = memory();
-        let anonymous = Mapping::anonymous(64 * MIB);
-        anonymous.write_every_page();
-        assert!(memory() >= before + 60 * MIB, "anonymous memory not counted");
-        drop(anonymous);
-        let dir = TempDir::new();
-        let path = dir.path().join("big");
-        fs::write(&path, vec![1_u8; usize::try_from(64 * MIB).expect("fits")]).expect("write file");
-        let before = memory();
-        let file = Mapping::file(&path, 64 * MIB);
-        assert!(file.read_every_page() > 0);
-        assert!(memory() <= before + 8 * MIB, "mapped file counted");
-    }
-}
-
-struct Mapping {
-    address: *mut libc::c_void,
-    length: usize,
-}
-
-impl Mapping {
-    fn anonymous(length: u64) -> Self {
-        Self::map(length, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS, -1)
-    }
-
-    fn file(path: &std::path::Path, length: u64) -> Self {
-        let file = fs::File::open(path).expect("open mapped file");
-        Self::map(length, libc::PROT_READ, libc::MAP_PRIVATE, std::os::fd::AsRawFd::as_raw_fd(&file))
-    }
-
-    fn map(length: u64, protection: i32, flags: i32, fd: i32) -> Self {
-        let length = usize::try_from(length).expect("length fits");
-        let address = unsafe { libc::mmap(std::ptr::null_mut(), length, protection, flags, fd, 0) };
-        assert_ne!(address, libc::MAP_FAILED, "mmap failed");
-        Self { address, length }
-    }
-
-    fn pages(&self) -> impl Iterator<Item = *mut u8> {
-        let base = self.address.cast::<u8>();
-        (0..self.length).step_by(4096).map(move |offset| base.wrapping_add(offset))
-    }
-
-    fn write_every_page(&self) {
-        for page in self.pages() {
-            unsafe { page.write_volatile(1) };
-        }
-    }
-
-    fn read_every_page(&self) -> u64 {
-        self.pages().map(|page| u64::from(unsafe { page.read_volatile() })).sum()
-    }
-}
-
-impl Drop for Mapping {
-    fn drop(&mut self) {
-        unsafe { libc::munmap(self.address, self.length) };
+        probe::counts_anonymous_memory_but_not_a_mapped_file(&LinuxSource::new());
     }
 }
