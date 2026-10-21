@@ -6,6 +6,7 @@ mod alerts;
 mod config;
 mod context;
 mod cornercase;
+#[cfg_attr(not(test), expect(dead_code, reason = "usage and alerts read the samples once they land"))]
 mod procs;
 mod usage;
 

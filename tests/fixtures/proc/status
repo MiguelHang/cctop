@@ -1,0 +1,19 @@
+Name:	worker
+Umask:	0022
+State:	S (sleeping)
+Tgid:	4242
+Ngid:	0
+Pid:	4242
+PPid:	4100
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+FDSize:	64
+VmPeak:	  812344 kB
+VmSize:	  812000 kB
+VmRSS:	  150000 kB
+RssAnon:	  120000 kB
+RssFile:	   30000 kB
+RssShmem:	       0 kB
+VmSwap:	    2048 kB
+Threads:	4
