@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), expect(dead_code, reason = "used by the TUI and the watch service once they are wired"))]
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -16,6 +14,7 @@ pub(crate) fn config_file(env: impl Fn(&str) -> Option<OsString>) -> Option<Path
     config_dir(env).map(|dir| dir.join(CONFIG_FILE))
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "the TUI reads its state folder from task 010"))]
 pub(crate) fn state_dir(env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     absolute(&env, "CORNERCASE_PLUGIN_STATE")
         .or_else(|| absolute(&env, "XDG_STATE_HOME").map(|dir| dir.join(APP)))
