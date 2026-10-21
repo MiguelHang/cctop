@@ -49,7 +49,7 @@ En un pane con una sesión de Claude en este repositorio (o en el de cornercase)
 
 ## 4. CPU en reposo con unos 30 panes (requisito no funcional)
 
-Medida previa sin cornercase real (2026-10-21, VM de 8 vCPU, 58 panes, 128 procesos del usuario): el muestreo de `/proc` y el árbol cuestan unos 30 ms de CPU por ciclo y cada `cornercase status --json` unos 47 ms en el cliente, así que con `interval = "2s"` cctop rondaría el **4 % de un núcleo**, por encima del 1 % pedido. Detalle y primeras ideas de mejora en [design/processes.md](../design/processes.md). Para repetir la parte de muestreo:
+Medida en desarrollo (2026-10-21, VM de 8 vCPU, 58 panes, unos 126 procesos del usuario, TUI en una pseudo-terminal 60 s): antes de 017, **3–4 % de un núcleo** (muestreo de `/proc` y árbol unos 30 ms por ciclo, cada `cornercase status --json` unos 45 ms en el hijo); después, **0,9–1,2 %**. 017 abarató la muestra (dueño por los metadatos de la carpeta, `statm` en vez de `status` sin swap, `cmdline`/`environ` leídos una vez por proceso), pide `status` cada 10 s o al aparecer un pane nuevo (el agente, su estado y el % de contexto pueden ir hasta 10 s tarde) y solo redibuja cuando algo cambia. Falta medirlo con unos 30 panes, que es lo que pide el requisito; con la mitad de procesos debería quedar por debajo del 1 %. Detalle, medidas y lo descartado en [design/processes.md](../design/processes.md) (coste de una muestra) y [design/tui.md](../design/tui.md) (coste en reposo). Para repetir la parte de muestreo:
 
 ```sh
 cornercase status --json > /tmp/status.json
@@ -68,7 +68,7 @@ echo "scale=2; ($t1 - $t0) * 100 / 60 / $(getconf CLK_TCK)" | bc    # % de un n�
 
 - Los campos 16 y 17 suman los hijos ya esperados (los `cornercase status`); el trabajo del servidor de cornercase al responder no entra, medirlo aparte si importa (`pidstat -p <pid del servidor> 60 1`).
 - Repetir con la vista Context sobre un pane con Claude, y para `cctop watch` (cada 5 s por defecto).
-- Si pasa del 1 % (lo esperado según la medida previa), abrir `017-idle-cpu` con el perfil (`perf record -g -p $pid`) y las ideas de `design/processes.md`.
+- Si con unos 30 panes pasa del 1 %, perfilar (`perf record -g -p $pid`) y anotar la medida en `design/tui.md` antes de abrir otra tarea. `cctop watch` sigue pidiendo `status` cada 5 s (unos 0,9 % en la máquina medida).
 
 ## 5. Publicar: repositorio, CI y release
 

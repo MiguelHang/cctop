@@ -56,16 +56,22 @@ where
     B: Backend,
     B::Error: Send + Sync + 'static,
 {
+    let mut changed = true;
     loop {
         for update in updates.try_iter() {
             app.update(update, Instant::now());
+            changed = true;
         }
-        app.check_stale(Instant::now());
-        terminal.draw(|frame| app.draw(frame)).map_err(io::Error::other)?;
-        if let Some(event) = events.next(POLL)?
-            && app.handle(&event) == Flow::Quit
-        {
-            return Ok(());
+        changed |= app.check_stale(Instant::now());
+        if changed {
+            terminal.draw(|frame| app.draw(frame)).map_err(io::Error::other)?;
+        }
+        changed = false;
+        if let Some(event) = events.next(POLL)? {
+            if app.handle(&event) == Flow::Quit {
+                return Ok(());
+            }
+            changed = true;
         }
     }
 }
@@ -131,11 +137,15 @@ impl App {
         self.ask_context();
     }
 
-    fn check_stale(&mut self, now: Instant) {
+    fn check_stale(&mut self, now: Instant) -> bool {
         let quiet = now.saturating_duration_since(self.answered);
-        if quiet > (self.interval * STALE_TICKS).max(STALE_MIN) {
-            self.error = Some(format!("cornercase has not answered for {}s", quiet.as_secs()));
+        if quiet <= (self.interval * STALE_TICKS).max(STALE_MIN) {
+            return false;
         }
+        let error = Some(format!("cornercase has not answered for {}s", quiet.as_secs()));
+        let changed = self.error != error;
+        self.error = error;
+        changed
     }
 
     fn handle(&mut self, event: &Event) -> Flow {
