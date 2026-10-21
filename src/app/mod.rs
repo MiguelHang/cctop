@@ -18,10 +18,10 @@ use state::State;
 use terminal::{Crossterm, Events, Screen};
 use view::Line;
 
-use crate::config::{Config, Loaded};
+use crate::config::{self, Loaded};
 use crate::cornercase::{Client, CommandRunner};
 use crate::error::Result;
-use crate::paths;
+use crate::procs;
 use crate::ui::{self, Header, Hits, View};
 use crate::usage::{self, Tree};
 
@@ -30,11 +30,8 @@ const STALE_TICKS: u32 = 3;
 const STALE_MIN: Duration = Duration::from_secs(5);
 
 pub(crate) fn run_tui() -> Result<()> {
-    let Loaded { config, warnings } = match paths::config_file(paths::system_env) {
-        Some(path) => Config::load(&path),
-        None => Loaded { config: Config::default(), warnings: Vec::new() },
-    };
-    let sampler = Sampler::new(Client::new(CommandRunner::from_env()), source());
+    let Loaded { config, warnings } = config::load_system();
+    let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system());
     let running = sampler::spawn(sampler, config.interval);
     let mut app = App::new(Some(state::from_config(config.sort)), config.interval, Instant::now());
     app.notice = warnings.into_iter().next();
@@ -42,28 +39,22 @@ pub(crate) fn run_tui() -> Result<()> {
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
 }
 
-#[cfg(target_os = "linux")]
-fn source() -> crate::procs::linux::LinuxSource {
-    crate::procs::linux::LinuxSource::new()
-}
-
-#[cfg(target_os = "macos")]
-fn source() -> crate::procs::macos::MacosSource {
-    crate::procs::macos::MacosSource::new()
-}
-
-fn run_loop<B: Backend>(
+fn run_loop<B>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     events: &mut impl Events,
     updates: &Receiver<Update>,
-) -> Result<()> {
+) -> Result<()>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+{
     loop {
         for update in updates.try_iter() {
             app.update(update, Instant::now());
         }
         app.check_stale(Instant::now());
-        terminal.draw(|frame| app.draw(frame)).map_err(|error| io::Error::other(error.to_string()))?;
+        terminal.draw(|frame| app.draw(frame)).map_err(io::Error::other)?;
         if let Some(event) = events.next(POLL)?
             && app.handle(&event) == Flow::Quit
         {

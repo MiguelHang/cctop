@@ -4,7 +4,7 @@ use ratatui::crossterm::event::{
 
 use super::state::State;
 use super::view::Line;
-use crate::ui::{Hit, Hits};
+use crate::ui::{Hit, Hits, ViewTab};
 
 const WHEEL: isize = 3;
 
@@ -26,12 +26,20 @@ pub(super) fn handle(state: &mut State, lines: &[Line], hits: &Hits, event: &Eve
 }
 
 fn key_press(state: &mut State, lines: &[Line], key: KeyEvent) -> Flow {
-    let page = isize::try_from(state.page.max(1)).unwrap_or(isize::MAX);
     match key.code {
         KeyCode::Char('q') => return Flow::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Flow::Quit,
-        KeyCode::Char('s') => state.next_sort(),
         KeyCode::Tab | KeyCode::BackTab => state.next_tab(),
+        _ if state.tab == ViewTab::Processes => list_key(state, lines, key.code),
+        _ => {}
+    }
+    Flow::Continue
+}
+
+fn list_key(state: &mut State, lines: &[Line], code: KeyCode) {
+    let page = isize::try_from(state.page.max(1)).unwrap_or(isize::MAX);
+    match code {
+        KeyCode::Char('s') => state.next_sort(),
         KeyCode::Up => state.step(lines, -1),
         KeyCode::Down => state.step(lines, 1),
         KeyCode::PageUp => state.step(lines, -page),
@@ -41,7 +49,6 @@ fn key_press(state: &mut State, lines: &[Line], key: KeyEvent) -> Flow {
         KeyCode::Right => fold_selected(state, lines, Some(false)),
         _ => {}
     }
-    Flow::Continue
 }
 
 fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
@@ -56,6 +63,14 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
 }
 
 fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) {
+    if state.tab != ViewTab::Processes {
+        if let (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) =
+            (mouse.kind, hits.at(mouse.column, mouse.row))
+        {
+            state.tab = tab;
+        }
+        return;
+    }
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => click(state, lines, hits.at(mouse.column, mouse.row)),
         MouseEventKind::ScrollDown => state.scroll_by(lines, WHEEL),

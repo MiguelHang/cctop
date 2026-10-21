@@ -22,8 +22,7 @@ pub fn run_tui() -> Result<()> {
 }
 
 pub fn run_watch() -> Result<()> {
-    let loaded = paths::config_file(paths::system_env).map(|path| config::Config::load(&path)).unwrap_or_default();
-    alerts::serve(&loaded);
+    alerts::serve(&config::load_system());
     Ok(())
 }
 

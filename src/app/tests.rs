@@ -273,6 +273,27 @@ mod mouse_and_keys {
         app.handle(&mouse(MouseEventKind::ScrollUp, 10, 4));
         assert_eq!(app.view().scroll, 0);
     }
+
+    #[test]
+    fn the_context_tab_leaves_the_process_list_alone() {
+        let mut app = app_with(first_sample(Instant::now()), Some(usage::Sort::Memory));
+        let (_, y) = find(&draw(&mut app, 100, 30), "%2 cargo");
+        app.handle(&click(40, y));
+        app.handle(&key(KeyCode::Tab));
+        draw(&mut app, 100, 8);
+        for event in [key(KeyCode::Down), key(KeyCode::Enter), key(KeyCode::Char('s'))] {
+            app.handle(&event);
+        }
+        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 4));
+        app.handle(&click(40, y));
+        assert_eq!(app.state.selected, Some(RowId::Pane(2)));
+        assert_eq!(app.state.sort, Some(usage::Sort::Memory));
+        assert_eq!(app.view().scroll, 0);
+        assert!(app.state.folded.is_empty());
+        let (x, y) = find(&draw(&mut app, 100, 8), "Processes ");
+        app.handle(&click(x, y));
+        assert_eq!(app.view().tab, ViewTab::Processes);
+    }
 }
 
 mod event_loop {
