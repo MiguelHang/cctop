@@ -7,6 +7,7 @@ use crate::error::Result;
 mod environ;
 #[cfg(test)]
 pub(crate) mod fake;
+mod kill;
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;
 #[cfg(target_os = "macos")]
@@ -15,6 +16,13 @@ pub(crate) mod macos;
 mod probe;
 #[cfg(any(target_os = "macos", test))]
 mod procargs;
+
+#[cfg(target_os = "linux")]
+use linux::identity;
+#[cfg(target_os = "macos")]
+use macos::identity;
+
+pub(crate) use kill::{Killer, Signal, Target, own_group};
 
 pub(crate) type Pid = u32;
 
@@ -31,6 +39,12 @@ pub(crate) struct Process {
     pub(crate) pane: Option<u64>,
     pub(crate) server: Option<String>,
     pub(crate) claude_config_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Identity {
+    pub(crate) started: u64,
+    pub(crate) pgid: Pid,
 }
 
 #[derive(Debug, Clone)]

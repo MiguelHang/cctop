@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::Path;
 
+#[cfg(test)]
+pub(super) mod fake;
+
 use super::view::pane_label;
 use crate::context::breakdown::{Breakdown, Part, PartKind};
 use crate::context::{Claude, Sessions, session};
@@ -75,7 +78,8 @@ fn is_claude(process: &Process) -> bool {
 fn config_dir(process: &Process, home: Option<&OsString>) -> Option<std::path::PathBuf> {
     session::config_dir(|key| match key {
         "HOME" => home.cloned(),
-        _ => process.claude_config_dir.clone().map(OsString::from),
+        session::CONFIG_ENV => process.claude_config_dir.clone().map(OsString::from),
+        _ => None,
     })
 }
 
@@ -155,4 +159,4 @@ fn one_line(text: &str) -> String {
 }
 
 #[cfg(test)]
-pub(super) mod tests;
+mod tests;

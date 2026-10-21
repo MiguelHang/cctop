@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use super::breakdown::{Accumulator, Breakdown};
+use super::fake::start;
 use super::record::parse;
 use super::{Claude, Sessions};
 use crate::test_util::{TempDir, fixture};
@@ -20,16 +21,6 @@ pub(super) fn expected(text: &str) -> Breakdown {
 
 fn transcript_path(config: &Path, id: &str) -> PathBuf {
     config.join("projects").join("-repo").join(format!("{id}.jsonl"))
-}
-
-pub(crate) fn start(config: &Path, pid: u32, id: &str, transcript: &str) {
-    let sessions = config.join("sessions");
-    let project = config.join("projects").join("-repo");
-    fs::create_dir_all(&sessions).expect("create sessions folder");
-    fs::create_dir_all(&project).expect("create project folder");
-    let session = serde_json::json!({ "pid": pid, "sessionId": id, "cwd": "/repo" });
-    fs::write(sessions.join(format!("{pid}.json")), session.to_string()).expect("write session file");
-    fs::write(project.join(format!("{id}.jsonl")), transcript).expect("write transcript");
 }
 
 fn overwrite_first_byte(config: &Path, id: &str) {

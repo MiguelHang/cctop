@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::paths::absolute;
 
-const CONFIG_ENV: &str = "CLAUDE_CONFIG_DIR";
+pub(crate) const CONFIG_ENV: &str = "CLAUDE_CONFIG_DIR";
 const DIR_NAME_MAX: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

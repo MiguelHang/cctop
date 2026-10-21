@@ -12,6 +12,8 @@ pub enum Error {
     NotInCornercase,
     #[error("cornercase lists no cctop project with a workspace at {}", .0.display())]
     NoWorkspace(PathBuf),
+    #[error("that process has ended")]
+    Ended,
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 }

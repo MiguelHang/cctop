@@ -8,14 +8,14 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use super::context::{Found, PaneContext};
-use super::sampler::{Reading, Sampler};
+use super::sampler::{Reading, Sampler, Update};
 use super::state::RowId;
 use super::terminal::Events;
 use super::{App, Flow, run_loop};
 use crate::cornercase::fake::FakeRunner;
 use crate::cornercase::{Client, Snapshot};
 use crate::error::Result;
-use crate::procs::fake::FakeSource;
+use crate::procs::fake::{FakeKiller, FakeSource};
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::fixture;
 use crate::ui::{ContextView, Sort, ViewTab};
@@ -26,7 +26,7 @@ const BOOT: &str = "4242-1700000000000000000";
 const MB: u64 = 1_000_000;
 const INTERVAL: Duration = Duration::from_secs(2);
 
-fn process(pid: Pid, parent: Pid, pane: u64, memory: u64, cpu_seconds: u64) -> Process {
+pub(super) fn process(pid: Pid, parent: Pid, pane: u64, memory: u64, cpu_seconds: u64) -> Process {
     Process {
         pid,
         ppid: Some(parent),
@@ -67,14 +67,18 @@ pub(super) fn fake_sampler() -> Sampler<FakeRunner, FakeSource> {
     Sampler::new(Client::new(runner), FakeSource::new([first_sample(now), second_sample(now)]))
 }
 
-fn reading(sample: Sample) -> Reading {
+pub(super) fn reading(sample: Sample) -> Reading {
     let snapshot = Snapshot::parse(STATUS).expect("parse the status fixture");
     Reading { snapshot, sample, cpu: std::collections::HashMap::new(), context: None }
 }
 
 fn app_with(sample: Sample, sort: Option<usage::Sort>) -> App {
-    let mut app = App::new(sort, INTERVAL, Instant::now());
-    app.update(Ok(reading(sample)), Instant::now());
+    app_killing_with(sample, sort, FakeKiller::default())
+}
+
+pub(super) fn app_killing_with(sample: Sample, sort: Option<usage::Sort>, killer: FakeKiller) -> App {
+    let mut app = App::new(sort, INTERVAL, Instant::now(), Box::new(killer));
+    app.update(Update::Reading(Ok(reading(sample))), Instant::now());
     app
 }
 
@@ -82,17 +86,17 @@ fn labels(app: &App) -> Vec<String> {
     app.view().rows.into_iter().map(|row| row.label).collect()
 }
 
-fn index_of(app: &App, id: RowId) -> usize {
+pub(super) fn index_of(app: &App, id: RowId) -> usize {
     app.lines.iter().position(|line| line.id == id).expect("the row is visible")
 }
 
-fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
+pub(super) fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
     terminal.draw(|frame| app.draw(frame)).expect("draw");
     terminal.backend().buffer().clone()
 }
 
-fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
+pub(super) fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
     (0..buffer.area.height)
         .find_map(|y| {
             let line: String = (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect();
@@ -102,15 +106,15 @@ fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
         .expect("the text is on screen")
 }
 
-fn click(column: u16, row: u16) -> Event {
+pub(super) fn click(column: u16, row: u16) -> Event {
     mouse(MouseEventKind::Down(MouseButton::Left), column, row)
 }
 
-fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
+pub(super) fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
     Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE })
 }
 
-fn key(code: KeyCode) -> Event {
+pub(super) fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::from(code))
 }
 
@@ -120,8 +124,8 @@ mod ticking {
     #[test]
     fn a_tick_with_fakes_gives_the_tree_in_cornercase_order() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now());
-        app.update(sampler.tick(), Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(sampler.tick()), Instant::now());
         let expected = [
             "notes",
             "main",
@@ -149,10 +153,10 @@ mod ticking {
     #[test]
     fn the_second_tick_brings_cpu() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now());
-        app.update(sampler.tick(), Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(sampler.tick()), Instant::now());
         assert_eq!(app.view().header.cpu, None);
-        app.update(sampler.tick(), Instant::now());
+        app.update(Update::Reading(sampler.tick()), Instant::now());
         let claude = index_of(&app, RowId::Process { pane: 1, pid: 101 });
         assert_eq!(app.view().rows[claude].cpu, Some(100.0));
     }
@@ -161,18 +165,18 @@ mod ticking {
     fn a_failed_status_shows_the_error_and_keeps_the_last_tree() {
         let now = Instant::now();
         let mut app = app_with(first_sample(now), None);
-        app.update(Err("cornercase: server not running".to_owned()), now);
+        app.update(Update::Reading(Err("cornercase: server not running".to_owned())), now);
         let view = app.view();
         assert_eq!(view.header.error.as_deref(), Some("cornercase: server not running"));
         assert_eq!(view.rows.len(), 18);
-        app.update(Ok(reading(second_sample(now))), now);
+        app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
         assert_eq!(app.view().header.error, None);
     }
 
     #[test]
     fn a_status_that_never_answers_is_reported_after_three_intervals() {
         let start = Instant::now();
-        let mut app = App::new(None, INTERVAL, start);
+        let mut app = App::new(None, INTERVAL, start, Box::new(FakeKiller::default()));
         app.check_stale(start + Duration::from_secs(6));
         assert_eq!(app.view().header.error, None);
         app.check_stale(start + Duration::from_secs(7));
@@ -200,7 +204,7 @@ mod refreshing {
         app.relayout();
         let cargo = index_of(&app, RowId::Pane(2));
         app.state.select(&app.lines, cargo);
-        app.update(Ok(reading(second_sample(now))), now);
+        app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
         assert_eq!(app.state.selected, Some(RowId::Pane(2)));
         assert_eq!(app.view().selected, Some(index_of(&app, RowId::Pane(2))));
         let pane = index_of(&app, RowId::Pane(1));
@@ -214,7 +218,7 @@ mod refreshing {
         let mut app = app_with(first_sample(now), None);
         let gone = index_of(&app, RowId::Process { pane: 2, pid: 201 });
         app.state.select(&app.lines, gone);
-        app.update(Ok(reading(second_sample(now))), now);
+        app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
         assert_eq!(app.state.selected, Some(RowId::Process { pane: 2, pid: 202 }));
     }
 }
@@ -301,8 +305,8 @@ mod context_view {
     use super::*;
 
     fn with_context(sample: Sample, context: PaneContext) -> App {
-        let mut app = App::new(None, INTERVAL, Instant::now());
-        app.update(Ok(Reading { context: Some(context), ..reading(sample) }), Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(Ok(Reading { context: Some(context), ..reading(sample) })), Instant::now());
         app
     }
 
@@ -322,6 +326,30 @@ mod context_view {
         select(&mut app, RowId::Pane(1));
         select(&mut app, RowId::Project(1));
         assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(2), Some(1), None]);
+    }
+
+    #[test]
+    fn a_context_answer_keeps_the_error_and_the_last_answer_time() {
+        let start = Instant::now();
+        let mut app = with_context(first_sample(start), PaneContext { pane: 2, found: Found::NoClaude });
+        app.update(Update::Reading(Err("cornercase: server not running".to_owned())), start);
+        select(&mut app, RowId::Pane(2));
+        app.update(Update::Context(Some(PaneContext { pane: 2, found: Found::NoSession(201) })), start + INTERVAL * 9);
+        assert_eq!(app.answered, start);
+        assert_eq!(app.view().header.error.as_deref(), Some("cornercase: server not running"));
+        app.handle(&key(KeyCode::Tab));
+        assert_eq!(app.view().context, ContextView::NoSession { pane: "%2 cargo".to_owned(), pid: 201 });
+    }
+
+    #[test]
+    fn a_selection_moved_outside_the_input_is_asked_on_the_next_draw() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (panes, asked) = mpsc::channel();
+        app.panes = Some(panes);
+        let index = index_of(&app, RowId::Pane(2));
+        app.state.select(&app.lines, index);
+        draw(&mut app, 100, 30);
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(2)]);
     }
 
     #[test]
@@ -369,9 +397,9 @@ mod event_loop {
     #[test]
     fn draws_the_updates_and_q_quits() {
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         let (send, updates) = mpsc::channel();
-        send.send(Ok(reading(first_sample(Instant::now())))).expect("send the update");
+        send.send(Update::Reading(Ok(reading(first_sample(Instant::now()))))).expect("send the update");
         let mut events = Scripted(VecDeque::from([None, Some(key(KeyCode::Char('q')))]));
         run_loop(&mut terminal, &mut app, &mut events, &updates).expect("the loop ends cleanly");
         find(terminal.backend().buffer(), "%1 claude");
@@ -380,7 +408,7 @@ mod event_loop {
 
     #[test]
     fn ctrl_c_quits_too() {
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
         assert_eq!(app.handle(&event), Flow::Quit);
     }

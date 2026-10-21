@@ -2,7 +2,7 @@ use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
 use super::{Running, Sampler, Update, spawn};
-use crate::app::context::tests::Counting;
+use crate::app::context::fake::Counting;
 use crate::app::context::{Found, PaneContext};
 use crate::app::tests::{STATUS, fake_sampler, first_sample};
 use crate::cornercase::Client;
@@ -33,7 +33,14 @@ fn claude_sampler() -> Sampler<FakeRunner, FakeSource, Counting> {
 }
 
 fn context_of(update: Option<Update>) -> Option<PaneContext> {
-    update.expect("an update").expect("a reading").context
+    match update.expect("an update") {
+        Update::Context(context) => context,
+        Update::Reading(reading) => panic!("a selection answers with a context, not {reading:?}"),
+    }
+}
+
+fn is_reading(update: &Update, ok: bool) -> bool {
+    matches!(update, Update::Reading(reading) if reading.is_ok() == ok)
 }
 
 fn receive(running: &Running, count: usize) -> Vec<Update> {
@@ -106,7 +113,7 @@ mod thread {
     fn sends_a_reading_every_interval() {
         let running = spawn(fake_sampler(), FAST);
         let updates = receive(&running, 2);
-        assert!(updates.iter().all(Result::is_ok));
+        assert!(updates.iter().all(|update| is_reading(update, true)));
     }
 
     #[test]
@@ -114,15 +121,14 @@ mod thread {
         let running = spawn(claude_sampler(), Duration::from_secs(3600));
         receive(&running, 1);
         running.panes.send(Some(1)).expect("the sampler listens");
-        let updates = receive(&running, 1);
-        let context = updates[0].as_ref().expect("a reading").context.as_ref().map(|context| context.pane);
-        assert_eq!(context, Some(1));
+        let update = receive(&running, 1).pop();
+        assert_eq!(context_of(update).map(|context| context.pane), Some(1));
     }
 
     #[test]
     fn keeps_retrying_while_cornercase_fails() {
         let running = spawn(failing_sampler(), FAST);
         let updates = receive(&running, 2);
-        assert!(updates.iter().all(Result::is_err));
+        assert!(updates.iter().all(|update| is_reading(update, false)));
     }
 }

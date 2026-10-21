@@ -1,4 +1,6 @@
 pub(crate) mod breakdown;
+#[cfg(test)]
+pub(crate) mod fake;
 mod reader;
 pub(crate) mod record;
 pub(crate) mod session;
@@ -43,4 +45,4 @@ impl Sessions {
 }
 
 #[cfg(test)]
-pub(crate) mod tests;
+mod tests;

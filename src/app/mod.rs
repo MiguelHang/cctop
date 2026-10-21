@@ -1,5 +1,6 @@
 mod context;
 mod input;
+mod kill;
 mod sampler;
 mod state;
 mod terminal;
@@ -14,7 +15,8 @@ use ratatui::crossterm::event::Event;
 use ratatui::{Frame, Terminal};
 
 use input::Flow;
-use sampler::{Reading, Sampler, Update};
+use kill::Prompt;
+use sampler::{Reading, Sampler, Tick, Update};
 use state::State;
 use terminal::{Crossterm, Events, Screen};
 use view::Line;
@@ -23,7 +25,7 @@ use crate::config::{self, Loaded};
 use crate::context::Sessions;
 use crate::cornercase::{Client, CommandRunner};
 use crate::error::Result;
-use crate::procs;
+use crate::procs::{self, Killer};
 use crate::ui::{self, ContextView, Header, Hits, View};
 use crate::usage::{self, Tree};
 
@@ -36,7 +38,8 @@ pub(crate) fn run_tui() -> Result<()> {
     let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system())
         .with_contexts(Sessions::default(), std::env::var_os("HOME"));
     let running = sampler::spawn(sampler, config.interval);
-    let mut app = App::new(Some(state::from_config(config.sort)), config.interval, Instant::now());
+    let sort = Some(state::from_config(config.sort));
+    let mut app = App::new(sort, config.interval, Instant::now(), Box::new(procs::Signal));
     app.notice = warnings.into_iter().next();
     app.panes = Some(running.panes);
     let mut screen = Screen::enter()?;
@@ -79,10 +82,13 @@ pub(crate) struct App {
     answered: Instant,
     panes: Option<Sender<Option<u64>>>,
     asked: Option<u64>,
+    prompt: Option<Prompt>,
+    killer: Box<dyn Killer>,
+    cctop_group: Option<procs::Pid>,
 }
 
 impl App {
-    fn new(sort: Option<usage::Sort>, interval: Duration, now: Instant) -> Self {
+    fn new(sort: Option<usage::Sort>, interval: Duration, now: Instant, killer: Box<dyn Killer>) -> Self {
         Self {
             state: State::new(sort),
             reading: None,
@@ -95,12 +101,26 @@ impl App {
             answered: now,
             panes: None,
             asked: None,
+            prompt: None,
+            killer,
+            cctop_group: procs::own_group(),
         }
     }
 
     fn update(&mut self, update: Update, now: Instant) {
-        self.answered = now;
         match update {
+            Update::Reading(reading) => self.read(reading, now),
+            Update::Context(context) => {
+                if let Some(reading) = &mut self.reading {
+                    reading.context = context;
+                }
+            }
+        }
+    }
+
+    fn read(&mut self, reading: Tick, now: Instant) {
+        self.answered = now;
+        match reading {
             Ok(reading) => {
                 self.reading = Some(reading);
                 self.error = None;
@@ -119,6 +139,9 @@ impl App {
     }
 
     fn handle(&mut self, event: &Event) -> Flow {
+        if self.prompt.is_some() {
+            return self.answer(event);
+        }
         let sort = self.state.sort;
         let flow = input::handle(&mut self.state, &self.lines, &self.hits, event);
         if matches!(event, Event::Key(_) | Event::Mouse(_)) {
@@ -130,6 +153,10 @@ impl App {
             self.rebuild();
         }
         self.ask_context();
+        if flow == Flow::Kill {
+            self.ask_kill();
+            return Flow::Continue;
+        }
         flow
     }
 
@@ -165,18 +192,29 @@ impl App {
         self.state.reconcile(&self.lines);
     }
 
+    #[cfg(test)]
     fn view(&self) -> View {
+        self.view_with(self.context_view())
+    }
+
+    fn view_with(&self, context: ContextView) -> View {
         let error = self.error.clone().or_else(|| self.notice.clone());
         let header = Header { memory: self.tree.totals.memory, cpu: self.tree.totals.cpu, error };
-        view::view(&self.state, &self.lines, header, self.context_view())
+        let dialog = self.prompt.as_ref().map(|prompt| prompt.dialog.clone());
+        View { dialog, ..view::view(&self.state, &self.lines, header, context) }
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
         self.state.page = usize::from(frame.area().height.saturating_sub(2)).max(1);
         self.state.reconcile(&self.lines);
-        let most = ui::context_scroll_max(&self.context_view(), frame.area().height);
+        self.ask_context();
+        let mut context = self.context_view();
+        let most = ui::context_scroll_max(&context, frame.area().height);
         self.state.context_scroll = self.state.context_scroll.min(most);
-        self.hits = ui::render(frame, &self.view());
+        if let ContextView::Session(session) = &mut context {
+            session.scroll = self.state.context_scroll;
+        }
+        self.hits = ui::render(frame, &self.view_with(context));
     }
 }
 

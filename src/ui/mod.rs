@@ -1,4 +1,5 @@
 mod context;
+mod dialog;
 mod hits;
 mod table;
 mod text;
@@ -10,6 +11,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
 pub(crate) use context::scroll_max as context_scroll_max;
+pub(crate) use dialog::{Button, Dialog};
 pub(crate) use hits::{Hit, Hits};
 pub(crate) use view::{
     ContextPart, ContextPercent, ContextSession, ContextView, Header, Row, RowKind, Sort, View, ViewTab,
@@ -34,6 +36,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
     match view.tab {
         ViewTab::Processes => table::draw(buffer, body, view, &mut hits),
         ViewTab::Context => context::draw(buffer, body, &view.context),
+    }
+    if let Some(dialog) = &view.dialog {
+        hits = dialog::draw(buffer, area, dialog);
     }
     hits
 }

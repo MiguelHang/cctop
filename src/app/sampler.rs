@@ -16,7 +16,13 @@ pub(crate) struct Reading {
     pub(super) context: Option<PaneContext>,
 }
 
-pub(crate) type Update = Result<Reading, String>;
+pub(crate) type Tick = Result<Reading, String>;
+
+#[derive(Debug)]
+pub(crate) enum Update {
+    Reading(Tick),
+    Context(Option<PaneContext>),
+}
 
 pub(crate) struct Sampler<R, S, C = Sessions> {
     client: Client<R>,
@@ -43,7 +49,7 @@ impl<R, S, C> Sampler<R, S, C> {
 }
 
 impl<R: Runner, S: ProcessSource, C: Contexts> Sampler<R, S, C> {
-    pub(super) fn tick(&mut self) -> Update {
+    pub(super) fn tick(&mut self) -> Tick {
         let sample = self.source.sample().map_err(|error| format!("cannot read the processes: {error}"))?;
         let cpu = self.previous.as_ref().map(|previous| cpu_percent(previous, &sample)).unwrap_or_default();
         self.previous = Some(sample.clone());
@@ -56,10 +62,10 @@ impl<R: Runner, S: ProcessSource, C: Contexts> Sampler<R, S, C> {
 
     pub(super) fn select(&mut self, pane: Option<u64>) -> Option<Update> {
         self.pane = pane;
-        let mut reading = self.last.take()?;
-        reading.context = self.context(&reading);
-        self.last = Some(reading.clone());
-        Some(Ok(reading))
+        let reading = self.last.take()?;
+        let context = self.context(&reading);
+        self.last = Some(reading);
+        Some(Update::Context(context))
     }
 
     fn context(&mut self, reading: &Reading) -> Option<PaneContext> {
@@ -82,7 +88,9 @@ where
     let (updates, receiver) = mpsc::channel();
     let (panes, selected) = mpsc::channel();
     std::thread::spawn(move || {
-        while updates.send(sampler.tick()).is_ok() && wait(&mut sampler, &selected, &updates, interval) {}
+        while updates.send(Update::Reading(sampler.tick())).is_ok() && wait(&mut sampler, &selected, &updates, interval)
+        {
+        }
     });
     Running { updates: receiver, panes }
 }

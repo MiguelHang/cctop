@@ -25,6 +25,7 @@ pub(super) fn view(state: &State, lines: &[Line], header: Header, context: Conte
         sort: column(state.sort),
         header,
         context,
+        dialog: None,
     }
 }
 

@@ -5,7 +5,7 @@ use std::ptr;
 use std::time::{Duration, Instant};
 
 use super::procargs::{ProcArgs, parse_procargs};
-use super::{Process, ProcessSource, Sample};
+use super::{Identity, Pid, Process, ProcessSource, Sample};
 use crate::error::Result;
 
 const SPARE_PIDS: usize = 64;
@@ -39,7 +39,7 @@ impl MacosSource {
             args,
             memory: footprint(pid),
             cpu_time: self.timebase.to_duration(cpu_ticks),
-            started: bsd.pbi_start_tvsec.saturating_mul(MICROS_PER_SECOND).saturating_add(bsd.pbi_start_tvusec),
+            started: started(&bsd),
             pane: env.pane,
             server: env.server,
             claude_config_dir: env.claude_config_dir,
@@ -90,6 +90,15 @@ unsafe trait PlainData: Copy {}
 
 unsafe impl PlainData for libc::proc_bsdinfo {}
 unsafe impl PlainData for libc::proc_taskinfo {}
+
+pub(crate) fn identity(pid: Pid) -> Option<Identity> {
+    let bsd = pid_info::<libc::proc_bsdinfo>(c_int::try_from(pid).ok()?, libc::PROC_PIDTBSDINFO)?;
+    Some(Identity { started: started(&bsd), pgid: bsd.pbi_pgid })
+}
+
+fn started(bsd: &libc::proc_bsdinfo) -> u64 {
+    bsd.pbi_start_tvsec.saturating_mul(MICROS_PER_SECOND).saturating_add(bsd.pbi_start_tvusec)
+}
 
 fn pid_info<T: PlainData>(pid: c_int, flavor: c_int) -> Option<T> {
     let mut info = MaybeUninit::<T>::zeroed();

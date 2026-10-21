@@ -7,11 +7,12 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use rstest::rstest;
 
+use super::fake::Counting;
 use super::{Contexts, Found, PaneContext, Source, is_claude, pane_node, percent, read, view};
+use crate::context::Sessions;
 use crate::context::breakdown::{Accumulator, Breakdown, Estimate, Part, PartKind};
+use crate::context::fake::start;
 use crate::context::record::parse;
-use crate::context::tests::start;
-use crate::context::{Claude, Sessions};
 use crate::cornercase::Snapshot;
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::{TempDir, fixture};
@@ -22,18 +23,6 @@ const STATUS: &str = fixture!("cornercase/status-0.12.173.json");
 const SESSION: &str = fixture!("claude/2.1.306/session.jsonl");
 const BOOT: &str = "4242-1700000000000000000";
 const SESSION_ID: &str = "00000000-0000-4000-8000-000000000001";
-
-#[derive(Default)]
-pub(in crate::app) struct Counting {
-    pub(in crate::app) asked: Vec<Vec<Pid>>,
-}
-
-impl Contexts for Counting {
-    fn read(&mut self, claudes: &[Claude]) -> HashMap<Pid, Breakdown> {
-        self.asked.push(claudes.iter().map(|claude| claude.pid).collect());
-        HashMap::new()
-    }
-}
 
 fn process(pid: Pid, parent: Pid, pane: Option<u64>, name: &str) -> Process {
     Process {
@@ -179,8 +168,17 @@ mod viewing {
     use super::*;
 
     fn session_view(found: Found) -> ContextView {
+        session_view_showing(found, None)
+    }
+
+    fn session_view_showing(found: Found, shown: Option<u16>) -> ContextView {
         let sample = sample(None);
-        let tree = tree(&sample);
+        let mut tree = tree(&sample);
+        let workspaces = tree.projects.iter_mut().flat_map(|project| &mut project.workspaces);
+        let panes = workspaces.flat_map(|workspace| &mut workspace.tabs).flat_map(|tab| &mut tab.panes);
+        for pane in panes.filter(|pane| pane.id == 1 && shown.is_some()) {
+            pane.context_percent = shown;
+        }
         view(pane_node(&tree, 1), Some(&PaneContext { pane: 1, found }), 0)
     }
 
@@ -193,7 +191,7 @@ mod viewing {
         let view = View {
             tab: ViewTab::Context,
             header: Header { memory: Some(1 << 30), cpu: Some(12.0), error: None },
-            context: session_view(Found::Session(101, expected())),
+            context: session_view_showing(Found::Session(101, expected()), Some(23)),
             ..View::default()
         };
         let mut terminal = Terminal::new(TestBackend::new(90, 30)).expect("test terminal");

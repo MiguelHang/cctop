@@ -1,3 +1,5 @@
+use super::dialog::Dialog;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ViewTab {
     #[default]
@@ -57,6 +59,7 @@ pub(crate) struct View {
     pub(crate) sort: Sort,
     pub(crate) header: Header,
     pub(crate) context: ContextView,
+    pub(crate) dialog: Option<Dialog>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

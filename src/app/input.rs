@@ -12,15 +12,13 @@ const WHEEL: isize = 3;
 pub(crate) enum Flow {
     Continue,
     Quit,
+    Kill,
 }
 
 pub(super) fn handle(state: &mut State, lines: &[Line], hits: &Hits, event: &Event) -> Flow {
     match event {
         Event::Key(key) if key.kind != KeyEventKind::Release => key_press(state, lines, *key),
-        Event::Mouse(mouse) => {
-            self::mouse(state, lines, hits, *mouse);
-            Flow::Continue
-        }
+        Event::Mouse(mouse) => self::mouse(state, lines, hits, *mouse),
         _ => Flow::Continue,
     }
 }
@@ -30,6 +28,7 @@ fn key_press(state: &mut State, lines: &[Line], key: KeyEvent) -> Flow {
         KeyCode::Char('q') => return Flow::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Flow::Quit,
         KeyCode::Tab | KeyCode::BackTab => state.next_tab(),
+        KeyCode::Char('k') if state.tab == ViewTab::Processes => return Flow::Kill,
         _ if state.tab == ViewTab::Processes => list_key(state, lines, key.code),
         _ => {}
     }
@@ -62,17 +61,25 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
     }
 }
 
-fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) {
+fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) -> Flow {
     if state.tab != ViewTab::Processes {
         context_mouse(state, hits, mouse);
-        return;
+        return Flow::Continue;
     }
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => click(state, lines, hits.at(mouse.column, mouse.row)),
+        MouseEventKind::Down(MouseButton::Right) => return right_click(state, lines, hits.at(mouse.column, mouse.row)),
         MouseEventKind::ScrollDown => state.scroll_by(lines, WHEEL),
         MouseEventKind::ScrollUp => state.scroll_by(lines, -WHEEL),
         _ => {}
     }
+    Flow::Continue
+}
+
+fn right_click(state: &mut State, lines: &[Line], hit: Option<Hit>) -> Flow {
+    let Some(Hit::Row(index) | Hit::Fold(index)) = hit else { return Flow::Continue };
+    state.select(lines, index);
+    Flow::Kill
 }
 
 fn context_mouse(state: &mut State, hits: &Hits, mouse: MouseEvent) {
@@ -94,7 +101,7 @@ fn click(state: &mut State, lines: &[Line], hit: Option<Hit>) {
                 state.toggle(line.id);
             }
         }
-        None => {}
+        Some(Hit::Button(_)) | None => {}
     }
 }
 

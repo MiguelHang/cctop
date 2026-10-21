@@ -4,7 +4,7 @@ expression: terminal.backend()
 ---
 " Processes  Context                                                   mem 1.0 GB  cpu 12% "
 "%1 claude · claude pid 101                                                                "
-"Total 46,203 tokens  23% of 200k  cornercase 42%                                          "
+"Total 46,203 tokens  23% of 200k  cornercase 23%                                          "
 "███████████████████████████████████████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"
 "█ Fixed ≈19.8k 43%   ▒ Dynamic ≈26.4k 57%                                                 "
 "                                                                                          "
