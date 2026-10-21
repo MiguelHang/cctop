@@ -1,0 +1,20 @@
+{
+  "processes": [
+    { "pid": 1, "ppid": null, "name": "systemd", "memory": 4000000 },
+    { "pid": 10, "ppid": 1, "name": "cornercase", "memory": 300000000, "cpu": 3.0 },
+    { "pid": 100, "ppid": 10, "name": "zsh", "memory": 5000000, "pane": 1, "server": "4242-1700000000000000000" },
+    { "pid": 101, "ppid": 100, "name": "claude", "memory": 400000000, "cpu": 12.0, "pane": 1, "server": "4242-1700000000000000000" },
+    { "pid": 102, "ppid": 101, "name": "bash", "memory": 3000000, "pane": 1, "server": "4242-1700000000000000000" },
+    { "pid": 103, "ppid": 102, "name": "cargo", "memory": 90000000, "cpu": 1.0, "pane": 1, "server": "4242-1700000000000000000" },
+    { "pid": 104, "ppid": 103, "name": "test-bin", "memory": 4000000000, "cpu": 40.0 },
+    { "pid": 105, "ppid": 101, "name": "node", "memory": 60000000, "cpu": 80.0, "pane": 1, "server": "4242-1700000000000000000" },
+    { "pid": 200, "ppid": 10, "name": "zsh", "memory": 5000000, "pane": 2, "server": "4242-1700000000000000000" },
+    { "pid": 201, "ppid": 200, "name": "cargo", "memory": 80000000, "cpu": 2.0, "pane": 2, "server": "4242-1700000000000000000" },
+    { "pid": 202, "ppid": 201, "name": "rustc", "memory": null, "cpu": 150.0 },
+    { "pid": 300, "ppid": 10, "name": "zsh", "memory": 5000000, "pane": 7, "server": "4242-1700000000000000000" },
+    { "pid": 301, "ppid": 300, "name": "claude", "memory": 350000000, "cpu": 0.5, "pane": 7, "server": "4242-1700000000000000000" },
+    { "pid": 400, "ppid": 1, "name": "zsh", "memory": 5000000, "pane": 1, "server": "9999-1700000000000000001" },
+    { "pid": 401, "ppid": 400, "name": "vim", "memory": 20000000 },
+    { "pid": 500, "ppid": 10, "name": "zsh", "memory": 5000000, "pane": 99, "server": "4242-1700000000000000000" }
+  ]
+}

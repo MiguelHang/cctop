@@ -9,6 +9,7 @@ mod context;
 mod cornercase;
 #[cfg_attr(not(test), expect(dead_code, reason = "usage and alerts read the samples once they land"))]
 mod procs;
+#[cfg_attr(not(test), expect(dead_code, reason = "the app and the alerts build the tree from tasks 010 and 013"))]
 mod usage;
 
 mod app;
