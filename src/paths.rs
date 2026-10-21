@@ -30,7 +30,7 @@ fn home(env: &impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     absolute(env, "HOME")
 }
 
-fn absolute(env: &impl Fn(&str) -> Option<OsString>, key: &str) -> Option<PathBuf> {
+pub(crate) fn absolute(env: &impl Fn(&str) -> Option<OsString>, key: &str) -> Option<PathBuf> {
     env(key).map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
