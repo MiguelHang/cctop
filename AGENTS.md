@@ -15,6 +15,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt
 cargo-machete                               # unused dependencies
 npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.json
+.github/versions.sh                         # Cargo.toml and the manifest agree on the version
 cornercase plugin link .                    # try it in the real cornercase, then `cornercase plugin enable cctop`
 ```
 
@@ -22,7 +23,7 @@ cornercase plugin link .                    # try it in the real cornercase, the
 - The toolchain is pinned in `rust-toolchain.toml`; bump it by hand and fix what clippy reports.
 - Snapshots (`insta`): a changed render writes a `.snap.new` and fails. Check it, then accept with `INSTA_UPDATE=always cargo test`. Delete snapshots of renamed or removed tests by hand.
 - **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>: <summary>`, imperative and lower case (`feat: show cpu per pane`). Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`, `chore`. **No `Co-Authored-By` trailers or "Generated with" lines**, in commits or pull requests.
-- A change to the app bumps `version` in `Cargo.toml` and `cornercase-plugin.toml` together and adds a `## <version>` section to `CHANGELOG.md`, written for users.
+- A change to the app bumps `version` in `Cargo.toml` and `cornercase-plugin.toml` together, removes the manifest's `[download.*]` tables (the release workflow writes them back, see [design/plugin.md](design/plugin.md)) and adds a `## <version>` section to `CHANGELOG.md`, written for users.
 
 ## Code conventions
 
