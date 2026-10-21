@@ -1,0 +1,292 @@
+use std::fs;
+use std::path::PathBuf;
+use std::process::{Child, Command};
+use std::time::Duration;
+
+use rstest::rstest;
+
+use super::{Env, LinuxSource, Stat, Status, parse_cmdline, parse_environ, parse_stat, parse_status};
+use crate::procs::{Pid, Process, ProcessSource};
+use crate::test_util::{TempDir, fixture, wait_until};
+
+const MIB: u64 = 1024 * 1024;
+const MEMORY_PROBE: &str = "procs::linux::tests::real_proc::memory_probe";
+const MEMORY_PROBE_VARIABLE: &str = "CCTOP_MEMORY_PROBE";
+
+fn own_process(source: &LinuxSource, pid: Pid) -> Option<Process> {
+    source.sample().expect("sample /proc").processes.into_iter().find(|process| process.pid == pid)
+}
+
+mod status {
+    use super::*;
+
+    #[test]
+    fn reads_parent_owner_and_anonymous_memory_plus_swap() {
+        let expected = Status { ppid: Some(4100), uid: Some(1000), memory: Some((120_000 + 2048) * 1024) };
+        assert_eq!(parse_status(fixture!("proc/status")), expected);
+    }
+
+    #[test]
+    fn counts_no_swap_when_the_line_is_missing() {
+        assert_eq!(parse_status("RssAnon:\t10 kB\n").memory, Some(10 * 1024));
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::cut_in_a_key("Name:\tworker\nPP")]
+    #[case::cut_after_the_colon("PPid:\nUid:\nRssAnon:")]
+    #[case::not_numbers("PPid:\tx\nUid:\t-\nRssAnon:\tlots kB\n")]
+    #[case::only_swap("VmSwap:\t2048 kB\n")]
+    fn leaves_what_is_missing_as_none(#[case] text: &str) {
+        assert_eq!(parse_status(text), Status::default());
+    }
+}
+
+mod stat {
+    use super::*;
+
+    #[test]
+    fn takes_the_name_between_the_first_and_last_parenthesis() {
+        let expected = Stat { name: "tmux: a (b)) c".to_owned(), pgid: 4242, cpu_ticks: 375, started: 987_654 };
+        assert_eq!(parse_stat(fixture!("proc/stat")), Some(expected));
+    }
+
+    #[rstest]
+    #[case::empty("")]
+    #[case::no_parenthesis("4242 worker S 1 2")]
+    #[case::cut_in_the_name("4242 (work")]
+    #[case::cut_after_the_name("4242 (worker) S 4100")]
+    #[case::cut_before_the_start_time("4242 (worker) S 4100 4242 4100 0 -1 0 0 0 0 0 250 125 0 0 20 0 4 0")]
+    #[case::closing_before_opening("1 )x( S")]
+    #[case::not_numbers("4242 (worker) S a b c d e f g h i j k l m n o p q r s t")]
+    fn is_none_when_truncated(#[case] text: &str) {
+        assert_eq!(parse_stat(text), None);
+    }
+}
+
+mod cmdline {
+    use super::*;
+
+    #[rstest]
+    #[case::fixture(fixture!("proc/cmdline").as_bytes(), &["/usr/bin/worker", "--flag", "", "last"])]
+    #[case::empty(b"", &[])]
+    #[case::without_the_last_nul(b"sleep\x0030", &["sleep", "30"])]
+    #[case::invalid_utf8(b"a\xff\x00", &["a\u{fffd}"])]
+    fn splits_on_nul(#[case] bytes: &[u8], #[case] expected: &[&str]) {
+        assert_eq!(parse_cmdline(bytes), expected);
+    }
+}
+
+mod environ {
+    use super::*;
+
+    #[test]
+    fn keeps_only_the_cornercase_and_claude_variables() {
+        let expected = Env {
+            pane: Some(7),
+            server: Some("x-1".to_owned()),
+            claude_config_dir: Some(PathBuf::from("/home/user/.claude-work")),
+        };
+        assert_eq!(parse_environ(fixture!("proc/environ").as_bytes()), expected);
+    }
+
+    #[rstest]
+    #[case::empty(b"")]
+    #[case::cut_in_a_name(b"HOME=/h\0CORNERCASE_PA")]
+    #[case::empty_values(b"CORNERCASE_PANE=\0CORNERCASE_SERVER=\0CLAUDE_CONFIG_DIR=\0")]
+    #[case::pane_not_a_number(b"CORNERCASE_PANE=seven\0")]
+    #[case::no_equals_sign(b"CORNERCASE_SERVER\0")]
+    fn leaves_what_is_missing_as_none(#[case] bytes: &[u8]) {
+        assert_eq!(parse_environ(bytes), Env::default());
+    }
+}
+
+mod fake_proc {
+    use super::*;
+
+    fn write_process(root: &TempDir, pid: &str, files: &[(&str, &str)]) {
+        let dir = root.path().join(pid);
+        fs::create_dir_all(&dir).expect("create process folder");
+        for (name, text) in files {
+            fs::write(dir.join(name), text).expect("write process file");
+        }
+    }
+
+    #[test]
+    fn keeps_a_process_whose_name_is_not_utf8() {
+        let root = TempDir::new();
+        write_process(&root, "4242", &fixture_files()[..1]);
+        let stat = fixture!("proc/stat").as_bytes();
+        let renamed = [&stat[..6], b"\xff", &stat[10..]].concat();
+        fs::write(root.path().join("4242/stat"), renamed).expect("write stat");
+        let source = LinuxSource::at(root.path().to_owned(), 1000, 100);
+        let process = own_process(&source, 4242).expect("process 4242");
+        assert_eq!(process.name, "\u{fffd}: a (b)) c");
+    }
+
+    fn fixture_files() -> [(&'static str, &'static str); 4] {
+        [
+            ("status", fixture!("proc/status")),
+            ("stat", fixture!("proc/stat")),
+            ("cmdline", fixture!("proc/cmdline")),
+            ("environ", fixture!("proc/environ")),
+        ]
+    }
+
+    #[test]
+    fn reads_a_process_of_the_user() {
+        let root = TempDir::new();
+        write_process(&root, "4242", &fixture_files());
+        let source = LinuxSource::at(root.path().to_owned(), 1000, 100);
+        let process = own_process(&source, 4242).expect("process 4242");
+        assert_eq!(process.ppid, Some(4100));
+        assert_eq!(process.name, "tmux: a (b)) c");
+        assert_eq!(process.args[0], "/usr/bin/worker");
+        assert_eq!(process.cpu_time, Duration::from_millis(3750));
+        assert_eq!((process.pane, process.server.as_deref()), (Some(7), Some("x-1")));
+    }
+
+    #[test]
+    fn skips_other_users_unreadable_and_non_process_entries() {
+        let root = TempDir::new();
+        write_process(&root, "4242", &fixture_files());
+        write_process(&root, "self", &fixture_files());
+        write_process(&root, "5000", &[("status", "Uid:\t1000\n")]);
+        write_process(&root, "6000", &[("stat", fixture!("proc/stat"))]);
+        let source = LinuxSource::at(root.path().to_owned(), 1001, 100);
+        assert_eq!(source.sample().expect("sample").processes, Vec::new());
+        let source = LinuxSource::at(root.path().to_owned(), 1000, 100);
+        let pids: Vec<_> = source.sample().expect("sample").processes.iter().map(|p| p.pid).collect();
+        assert_eq!(pids, vec![4242]);
+    }
+
+    #[test]
+    fn keeps_a_process_without_cmdline_or_environ() {
+        let root = TempDir::new();
+        write_process(&root, "4242", &fixture_files()[..2]);
+        let source = LinuxSource::at(root.path().to_owned(), 1000, 100);
+        let process = own_process(&source, 4242).expect("process 4242");
+        assert_eq!((process.args.len(), process.pane), (0, None));
+    }
+}
+
+mod real_proc {
+    use super::*;
+
+    struct Reaped(Child);
+
+    impl Drop for Reaped {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    #[test]
+    fn lists_the_test_process_with_its_parent_and_name() {
+        let source = LinuxSource::new();
+        let process = own_process(&source, std::process::id()).expect("own process listed");
+        assert_eq!(process.ppid, Some(std::os::unix::process::parent_id()));
+        assert!(process.name.starts_with("cctop"), "{}", process.name);
+        assert_eq!(process.args.first(), std::env::args().next().as_ref());
+        assert!(process.memory.is_some());
+    }
+
+    #[test]
+    fn reads_the_cornercase_variables_of_a_child() {
+        let child = Command::new("/bin/sleep")
+            .arg("30")
+            .env("CORNERCASE_PANE", "7")
+            .env("CORNERCASE_SERVER", "x-1")
+            .spawn()
+            .expect("spawn sleep");
+        let child = Reaped(child);
+        let source = LinuxSource::new();
+        let mut found = None;
+        wait_until("the child runs sleep", || {
+            found = own_process(&source, child.0.id()).filter(|process| process.name == "sleep");
+            found.is_some()
+        });
+        let process = found.expect("child listed");
+        assert_eq!((process.pane, process.server.as_deref()), (Some(7), Some("x-1")));
+        assert_eq!(process.ppid, Some(std::process::id()));
+    }
+
+    #[test]
+    fn counts_anonymous_memory_but_not_a_mapped_file() {
+        let output = Command::new(std::env::current_exe().expect("test binary"))
+            .args([MEMORY_PROBE, "--exact", "--ignored", "--test-threads=1"])
+            .env(MEMORY_PROBE_VARIABLE, "1")
+            .output()
+            .expect("run the memory probe");
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{report}");
+        assert!(report.contains("1 passed"), "{report}");
+    }
+
+    #[test]
+    #[ignore = "run alone in its own process by counts_anonymous_memory_but_not_a_mapped_file"]
+    fn memory_probe() {
+        if std::env::var_os(MEMORY_PROBE_VARIABLE).is_none() {
+            return;
+        }
+        let source = LinuxSource::new();
+        let memory = || own_process(&source, std::process::id()).and_then(|p| p.memory).expect("own memory");
+        let before = memory();
+        let anonymous = Mapping::anonymous(64 * MIB);
+        anonymous.write_every_page();
+        assert!(memory() >= before + 60 * MIB, "anonymous memory not counted");
+        drop(anonymous);
+        let dir = TempDir::new();
+        let path = dir.path().join("big");
+        fs::write(&path, vec![1_u8; usize::try_from(64 * MIB).expect("fits")]).expect("write file");
+        let before = memory();
+        let file = Mapping::file(&path, 64 * MIB);
+        assert!(file.read_every_page() > 0);
+        assert!(memory() <= before + 8 * MIB, "mapped file counted");
+    }
+}
+
+struct Mapping {
+    address: *mut libc::c_void,
+    length: usize,
+}
+
+impl Mapping {
+    fn anonymous(length: u64) -> Self {
+        Self::map(length, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS, -1)
+    }
+
+    fn file(path: &std::path::Path, length: u64) -> Self {
+        let file = fs::File::open(path).expect("open mapped file");
+        Self::map(length, libc::PROT_READ, libc::MAP_PRIVATE, std::os::fd::AsRawFd::as_raw_fd(&file))
+    }
+
+    fn map(length: u64, protection: i32, flags: i32, fd: i32) -> Self {
+        let length = usize::try_from(length).expect("length fits");
+        let address = unsafe { libc::mmap(std::ptr::null_mut(), length, protection, flags, fd, 0) };
+        assert_ne!(address, libc::MAP_FAILED, "mmap failed");
+        Self { address, length }
+    }
+
+    fn pages(&self) -> impl Iterator<Item = *mut u8> {
+        let base = self.address.cast::<u8>();
+        (0..self.length).step_by(4096).map(move |offset| base.wrapping_add(offset))
+    }
+
+    fn write_every_page(&self) {
+        for page in self.pages() {
+            unsafe { page.write_volatile(1) };
+        }
+    }
+
+    fn read_every_page(&self) -> u64 {
+        self.pages().map(|page| u64::from(unsafe { page.read_volatile() })).sum()
+    }
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        unsafe { libc::munmap(self.address, self.length) };
+    }
+}
