@@ -43,7 +43,10 @@ impl Runner for CommandRunner {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "the TUI focuses workspaces and projects from task 010"))]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "no caller focuses a workspace or project yet; the client covers every focus flag")
+)]
 pub(crate) enum Target {
     Pane(u64),
     Tab(u64),

@@ -9,6 +9,8 @@ use toml::Value;
 
 use values::{DURATION, Kind, PERCENT, SIZE, SORT};
 
+use crate::paths;
+
 const GIB: u64 = 1 << 30;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,6 +57,10 @@ impl Default for Config {
             sort: Sort::Memory,
         }
     }
+}
+
+pub(crate) fn load_system() -> Loaded {
+    paths::config_file(paths::system_env).map(|path| Config::load(&path)).unwrap_or_default()
 }
 
 impl Config {
