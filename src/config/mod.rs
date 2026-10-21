@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), expect(dead_code, reason = "used by the TUI and the watch service once they are wired"))]
-
 mod values;
 
 use std::io::ErrorKind;
