@@ -1,6 +1,6 @@
 # 002 — Procesos: trait, `Sample` y Linux
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001
 - **Paralelo con**: 004, 005, 006, 009 (módulos disjuntos)
 - **Estimación**: ~550 líneas (código ~300, tests ~250)

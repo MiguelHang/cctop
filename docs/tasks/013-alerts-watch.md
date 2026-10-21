@@ -1,6 +1,6 @@
 # 013 — Alertas y servicio `cctop watch`
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 004, 005, 008
 - **Paralelo con**: 010, 011, 012, 015
 - **Estimación**: ~500 líneas (código ~250, tests ~250)

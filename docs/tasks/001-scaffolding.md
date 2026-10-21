@@ -1,6 +1,6 @@
 # 001 — Scaffolding
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: —
 - **Paralelo con**: nada (todas dependen de esta)
 - **Estimación**: ~650 líneas (Cargo/config ~120, layers.rs ~300, CI ~80, resto ~150)

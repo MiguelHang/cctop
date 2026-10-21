@@ -1,6 +1,6 @@
 # 005 — Configuración
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001
 - **Paralelo con**: 002, 003, 004, 006, 007, 008, 009
 - **Estimación**: ~250 líneas (código ~110, tests ~140)
