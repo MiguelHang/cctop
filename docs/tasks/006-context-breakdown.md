@@ -1,6 +1,6 @@
 # 006 — Contexto: parseo del transcript y `Breakdown`
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001
 - **Paralelo con**: 002, 003, 004, 005, 008, 009
 - **Estimación**: ~700 líneas (código ~400, tests ~300; fixtures aparte)

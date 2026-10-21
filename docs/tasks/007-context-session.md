@@ -1,6 +1,6 @@
 # 007 — Contexto: localizar la sesión y lectura incremental
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 006 (usa `Accumulator`)
 - **Paralelo con**: 002, 003, 004, 005, 008, 009, 014
 - **Estimación**: ~500 líneas (código ~250, tests ~250)

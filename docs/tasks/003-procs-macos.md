@@ -1,6 +1,6 @@
 # 003 — Procesos en macOS
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 002
 - **Paralelo con**: 004, 005, 006, 007, 008, 009, 014 (solo toca `procs/macos*`)
 - **Estimación**: ~400 líneas (código ~250, tests ~150)

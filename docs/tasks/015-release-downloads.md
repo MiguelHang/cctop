@@ -1,6 +1,6 @@
 # 015 — Release con binarios y `[download]`
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001 (y 014 para el manifiesto final); idealmente al final del MVP para publicar 0.1.0
 - **Paralelo con**: 010, 011, 012, 013
 - **Estimación**: ~250 líneas (YAML + script + manifiesto + docs)
