@@ -6,6 +6,7 @@ use super::Sort;
 
 const MAX_BYTES: f64 = 18_446_744_073_709_549_568.0;
 const MIN_DURATION: Duration = Duration::from_millis(100);
+const MAX_DURATION: Duration = Duration::from_hours(24);
 
 pub(super) struct Kind<T> {
     pub(super) parse: fn(&Value) -> Option<T>,
@@ -13,7 +14,7 @@ pub(super) struct Kind<T> {
 }
 
 pub(super) const DURATION: Kind<Duration> =
-    Kind { parse: duration, expected: "a duration of at least 100ms such as \"2s\"" };
+    Kind { parse: duration, expected: "a duration between 100ms and 24h such as \"2s\"" };
 pub(super) const SIZE: Kind<u64> = Kind { parse: size, expected: "a size such as \"4GiB\"" };
 pub(super) const PERCENT: Kind<f64> = Kind { parse: percent, expected: "a percentage such as 300" };
 pub(super) const SORT: Kind<Sort> = Kind { parse: sort, expected: "\"memory\" or \"cpu\"" };
@@ -25,7 +26,7 @@ fn duration(value: &Value) -> Option<Duration> {
         Value::String(text) => text_duration(text)?,
         _ => return None,
     };
-    (duration >= MIN_DURATION).then_some(duration)
+    (MIN_DURATION..=MAX_DURATION).contains(&duration).then_some(duration)
 }
 
 fn text_duration(text: &str) -> Option<Duration> {

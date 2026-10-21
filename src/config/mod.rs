@@ -28,7 +28,7 @@ pub(crate) enum Sort {
     Cpu,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct Loaded {
     pub(crate) config: Config,
     pub(crate) warnings: Vec<String>,

@@ -98,7 +98,9 @@ mod invalid_values {
         assert_eq!(loaded.config, Config { sort: Sort::Cpu, ..Config::default() });
         assert_eq!(
             loaded.warnings,
-            ["interval = \"x\" is not valid, expected a duration of at least 100ms such as \"2s\"; using the default"]
+            [
+                "interval = \"x\" is not valid, expected a duration between 100ms and 24h such as \"2s\"; using the default"
+            ]
         );
     }
 

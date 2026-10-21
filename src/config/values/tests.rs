@@ -30,6 +30,9 @@ mod durations {
     #[case::the_minimum(r#""100ms""#, Some(Duration::from_millis(100)))]
     #[case::below_the_minimum(r#""99ms""#, None)]
     #[case::a_bare_float_below_the_minimum("0.000001", None)]
+    #[case::the_maximum(r#""24h""#, Some(Duration::from_hours(24)))]
+    #[case::above_the_maximum(r#""1441min""#, None)]
+    #[case::a_bare_integer_above_the_maximum("86401", None)]
     #[case::negative("-1", None)]
     #[case::a_boolean("true", None)]
     fn parse(#[case] toml: &str, #[case] expected: Option<Duration>) {

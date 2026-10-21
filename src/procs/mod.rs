@@ -43,6 +43,16 @@ pub(crate) trait ProcessSource {
     fn sample(&self) -> Result<Sample>;
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) fn system() -> impl ProcessSource {
+    linux::LinuxSource::new()
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn system() -> impl ProcessSource {
+    macos::MacosSource::new()
+}
+
 pub(crate) fn cpu_percent(prev: &Sample, next: &Sample) -> HashMap<Pid, f64> {
     let wall = next.taken.saturating_duration_since(prev.taken).as_secs_f64();
     if wall <= 0.0 {
