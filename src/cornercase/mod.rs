@@ -6,6 +6,7 @@ use std::process::Command;
 
 use crate::error::{Error, Result};
 
+pub(crate) mod open;
 pub(crate) mod snapshot;
 
 #[cfg(test)]
