@@ -1,18 +1,33 @@
-use std::fs;
-use std::path::PathBuf;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fs::{self, DirEntry, File};
+use std::io::Read;
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use super::environ::parse_environ;
+use super::environ::{Env, parse_environ};
 use super::{Identity, Pid, Process, ProcessSource, Sample};
 use crate::error::Result;
 
 const DEFAULT_TICKS_PER_SECOND: u64 = 100;
+const DEFAULT_PAGE_SIZE: u64 = 4096;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
+const READ_CAPACITY: usize = 4096;
 
 pub(crate) struct LinuxSource {
     root: PathBuf,
     uid: u32,
     ticks_per_second: u64,
+    page_size: u64,
+    launches: RefCell<HashMap<Pid, Launch>>,
+}
+
+struct Launch {
+    started: u64,
+    name: String,
+    args: Vec<String>,
+    env: Env,
 }
 
 impl LinuxSource {
@@ -21,31 +36,45 @@ impl LinuxSource {
     }
 
     fn at(root: PathBuf, uid: u32, ticks_per_second: u64) -> Self {
-        Self { root, uid, ticks_per_second: ticks_per_second.max(1) }
+        let ticks_per_second = ticks_per_second.max(1);
+        Self { root, uid, ticks_per_second, page_size: page_size(), launches: RefCell::default() }
     }
 
-    fn read(&self, pid: Pid) -> Option<Process> {
+    fn owned_pid(&self, entry: &DirEntry) -> Option<Pid> {
+        let pid = entry.file_name().to_str()?.parse::<Pid>().ok()?;
+        (entry.metadata().ok()?.uid() == self.uid).then_some(pid)
+    }
+
+    fn swapped(&self) -> bool {
+        read_file(&self.root.join("meminfo")).is_none_or(|bytes| swapped(&String::from_utf8_lossy(&bytes)))
+    }
+
+    fn read(&self, pid: Pid, known: &mut HashMap<Pid, Launch>, swapped: bool) -> Option<(Process, Launch)> {
         let dir = self.root.join(pid.to_string());
-        let status = parse_status(&String::from_utf8_lossy(&fs::read(dir.join("status")).ok()?));
-        if status.uid != Some(self.uid) {
-            return None;
-        }
-        let stat = parse_stat(&String::from_utf8_lossy(&fs::read(dir.join("stat")).ok()?))?;
-        let args = fs::read(dir.join("cmdline")).map(|bytes| parse_cmdline(&bytes)).unwrap_or_default();
-        let env = fs::read(dir.join("environ")).map(|bytes| parse_environ(&bytes)).unwrap_or_default();
-        Some(Process {
+        let stat = parse_stat(&String::from_utf8_lossy(&read_file(&dir.join("stat"))?))?;
+        let memory = if swapped {
+            parse_status(&String::from_utf8_lossy(&read_file(&dir.join("status"))?))
+        } else {
+            parse_statm(&read_file(&dir.join("statm"))?, self.page_size)
+        };
+        let launch = known
+            .remove(&pid)
+            .filter(|launch| launch.started == stat.started && launch.name == stat.name)
+            .unwrap_or_else(|| launch(&dir, &stat));
+        let process = Process {
             pid,
-            ppid: status.ppid,
+            ppid: Some(stat.ppid),
             pgid: stat.pgid,
             name: stat.name,
-            args,
-            memory: status.memory,
+            args: launch.args.clone(),
+            memory,
             cpu_time: self.ticks_to_duration(stat.cpu_ticks),
             started: stat.started,
-            pane: env.pane,
-            server: env.server,
-            claude_config_dir: env.claude_config_dir,
-        })
+            pane: launch.env.pane,
+            server: launch.env.server.clone(),
+            claude_config_dir: launch.env.claude_config_dir.clone(),
+        };
+        Some((process, launch))
     }
 
     fn ticks_to_duration(&self, ticks: u64) -> Duration {
@@ -55,15 +84,38 @@ impl LinuxSource {
     }
 }
 
+fn launch(dir: &Path, stat: &Stat) -> Launch {
+    Launch {
+        started: stat.started,
+        name: stat.name.clone(),
+        args: read_file(&dir.join("cmdline")).map(|bytes| parse_cmdline(&bytes)).unwrap_or_default(),
+        env: read_file(&dir.join("environ")).map(|bytes| parse_environ(&bytes)).unwrap_or_default(),
+    }
+}
+
 impl ProcessSource for LinuxSource {
     fn sample(&self) -> Result<Sample> {
         let taken = Instant::now();
+        let swapped = self.swapped();
+        let mut known = self.launches.take();
+        let mut launches = HashMap::with_capacity(known.len());
         let processes = fs::read_dir(&self.root)?
-            .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<Pid>().ok())
-            .filter_map(|pid| self.read(pid))
+            .filter_map(|entry| self.owned_pid(&entry.ok()?))
+            .filter_map(|pid| self.read(pid, &mut known, swapped))
+            .map(|(process, launch)| {
+                launches.insert(process.pid, launch);
+                process
+            })
             .collect();
+        self.launches.replace(launches);
         Ok(Sample { taken, processes })
     }
+}
+
+fn read_file(path: &Path) -> Option<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(READ_CAPACITY);
+    File::open(path).ok()?.read_to_end(&mut bytes).ok()?;
+    Some(bytes)
 }
 
 pub(crate) fn identity(pid: Pid) -> Option<Identity> {
@@ -80,35 +132,47 @@ fn ticks_per_second() -> u64 {
     u64::try_from(ticks).ok().filter(|&ticks| ticks > 0).unwrap_or(DEFAULT_TICKS_PER_SECOND)
 }
 
-#[derive(Debug, Default, PartialEq)]
-struct Status {
-    ppid: Option<Pid>,
-    uid: Option<u32>,
-    memory: Option<u64>,
+fn page_size() -> u64 {
+    let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+    u64::try_from(size).ok().filter(|&size| size > 0).unwrap_or(DEFAULT_PAGE_SIZE)
 }
 
-fn parse_status(text: &str) -> Status {
+fn swapped(meminfo: &str) -> bool {
+    let kib = |key: &str| {
+        let line = meminfo.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))?;
+        line.split_whitespace().next()?.parse::<u64>().ok()
+    };
+    match (kib("SwapTotal"), kib("SwapFree")) {
+        (Some(total), Some(free)) => total > free,
+        _ => true,
+    }
+}
+
+fn parse_status(text: &str) -> Option<u64> {
     let mut rss_anon: Option<u64> = None;
     let mut swap = None;
-    let mut status = Status::default();
     for line in text.lines() {
         let Some((key, value)) = line.split_once(':') else { continue };
-        let first = value.split_whitespace().next();
+        let first = value.split_whitespace().next().and_then(|value| value.parse().ok());
         match key {
-            "PPid" => status.ppid = first.and_then(|value| value.parse().ok()),
-            "Uid" => status.uid = first.and_then(|value| value.parse().ok()),
-            "RssAnon" => rss_anon = first.and_then(|value| value.parse().ok()),
-            "VmSwap" => swap = first.and_then(|value| value.parse().ok()),
+            "RssAnon" => rss_anon = first,
+            "VmSwap" => swap = first,
             _ => {}
         }
     }
-    status.memory = rss_anon.map(|kib| kib.saturating_add(swap.unwrap_or(0)).saturating_mul(1024));
-    status
+    rss_anon.map(|kib| kib.saturating_add(swap.unwrap_or(0)).saturating_mul(1024))
+}
+
+fn parse_statm(bytes: &[u8], page_size: u64) -> Option<u64> {
+    let mut pages = std::str::from_utf8(bytes).ok()?.split_whitespace().map(|field| field.parse::<u64>().ok());
+    let (size, resident, shared) = (pages.next()??, pages.next()??, pages.next()??);
+    (size > 0).then(|| resident.saturating_sub(shared).saturating_mul(page_size))
 }
 
 #[derive(Debug, PartialEq)]
 struct Stat {
     name: String,
+    ppid: Pid,
     pgid: Pid,
     cpu_ticks: u64,
     started: u64,
@@ -122,6 +186,7 @@ fn parse_stat(text: &str) -> Option<Stat> {
     let number = |index: usize| fields.get(index)?.parse::<u64>().ok();
     Some(Stat {
         name,
+        ppid: fields.get(1)?.parse().ok()?,
         pgid: fields.get(2)?.parse().ok()?,
         cpu_ticks: number(11)?.checked_add(number(12)?)?,
         started: number(19)?,

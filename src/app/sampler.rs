@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 use super::context::{self, Contexts, PaneContext, Source};
 use crate::context::Sessions;
 use crate::cornercase::{Client, Runner, Snapshot};
-use crate::procs::{Pid, ProcessSource, Sample, cpu_percent};
+use crate::procs::{Pid, Process, ProcessSource, Sample, cpu_percent};
+
+const STATUS_EVERY: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Reading {
@@ -32,19 +34,46 @@ pub(crate) struct Sampler<R, S, C = Sessions> {
     home: Option<OsString>,
     pane: Option<u64>,
     last: Option<Reading>,
+    asked: Option<Asked>,
+}
+
+struct Asked {
+    snapshot: Snapshot,
+    taken: Instant,
+    panes: HashSet<u64>,
+}
+
+impl Asked {
+    fn new(snapshot: Snapshot, sample: &Sample) -> Self {
+        let mut panes = sample_panes(sample, snapshot.boot.as_deref());
+        let projects = snapshot.projects.iter();
+        let tabs = projects.flat_map(|project| &project.workspaces).flat_map(|workspace| &workspace.tabs);
+        panes.extend(tabs.flat_map(|tab| &tab.panes).map(|pane| pane.id));
+        Self { snapshot, taken: sample.taken, panes }
+    }
+
+    fn covers(&self, sample: &Sample) -> bool {
+        sample.taken.saturating_duration_since(self.taken) < STATUS_EVERY
+            && sample_panes(sample, self.snapshot.boot.as_deref()).is_subset(&self.panes)
+    }
+}
+
+fn sample_panes(sample: &Sample, boot: Option<&str>) -> HashSet<u64> {
+    let ours = |process: &&Process| boot.is_some() && process.server.as_deref() == boot;
+    sample.processes.iter().filter(ours).filter_map(|process| process.pane).collect()
 }
 
 impl<R, S> Sampler<R, S> {
     pub(super) fn new(client: Client<R>, source: S) -> Self {
         let contexts = Sessions::default();
-        Self { client, source, previous: None, contexts, home: None, pane: None, last: None }
+        Self { client, source, previous: None, contexts, home: None, pane: None, last: None, asked: None }
     }
 }
 
 impl<R, S, C> Sampler<R, S, C> {
     pub(super) fn with_contexts<D>(self, contexts: D, home: Option<OsString>) -> Sampler<R, S, D> {
-        let Self { client, source, previous, pane, last, .. } = self;
-        Sampler { client, source, previous, contexts, home, pane, last }
+        let Self { client, source, previous, pane, last, asked, .. } = self;
+        Sampler { client, source, previous, contexts, home, pane, last, asked }
     }
 }
 
@@ -53,11 +82,21 @@ impl<R: Runner, S: ProcessSource, C: Contexts> Sampler<R, S, C> {
         let sample = self.source.sample().map_err(|error| format!("cannot read the processes: {error}"))?;
         let cpu = self.previous.as_ref().map(|previous| cpu_percent(previous, &sample)).unwrap_or_default();
         self.previous = Some(sample.clone());
-        let snapshot = self.client.status().map_err(|error| format!("cornercase: {error}"))?;
+        let snapshot = self.status(&sample)?;
         let mut reading = Reading { snapshot, sample, cpu, context: None };
         reading.context = self.context(&reading);
         self.last = Some(reading.clone());
         Ok(reading)
+    }
+
+    fn status(&mut self, sample: &Sample) -> Result<Snapshot, String> {
+        if let Some(asked) = self.asked.as_ref().filter(|asked| asked.covers(sample)) {
+            return Ok(asked.snapshot.clone());
+        }
+        self.asked = None;
+        let snapshot = self.client.status().map_err(|error| format!("cornercase: {error}"))?;
+        self.asked = Some(Asked::new(snapshot.clone(), sample));
+        Ok(snapshot)
     }
 
     pub(super) fn select(&mut self, pane: Option<u64>) -> Option<Update> {

@@ -177,10 +177,19 @@ mod ticking {
     fn a_status_that_never_answers_is_reported_after_three_intervals() {
         let start = Instant::now();
         let mut app = App::new(None, INTERVAL, start, Box::new(FakeKiller::default()));
-        app.check_stale(start + Duration::from_secs(6));
+        assert!(!app.check_stale(start + Duration::from_secs(6)));
         assert_eq!(app.view().header.error, None);
-        app.check_stale(start + Duration::from_secs(7));
+        assert!(app.check_stale(start + Duration::from_secs(7)));
         assert_eq!(app.view().header.error.as_deref(), Some("cornercase has not answered for 7s"));
+    }
+
+    #[test]
+    fn the_stale_message_asks_for_a_draw_only_when_its_seconds_change() {
+        let start = Instant::now();
+        let mut app = App::new(None, INTERVAL, start, Box::new(FakeKiller::default()));
+        assert!(app.check_stale(start + Duration::from_secs(7)));
+        assert!(!app.check_stale(start + Duration::from_millis(7500)));
+        assert!(app.check_stale(start + Duration::from_secs(8)));
     }
 
     #[test]
@@ -404,6 +413,16 @@ mod event_loop {
         run_loop(&mut terminal, &mut app, &mut events, &updates).expect("the loop ends cleanly");
         find(terminal.backend().buffer(), "%1 claude");
         assert!(events.0.is_empty());
+    }
+
+    #[test]
+    fn draws_again_only_after_an_update_or_an_input() {
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        let (_send, updates) = mpsc::channel();
+        let script = [None, None, Some(key(KeyCode::Down)), None, Some(key(KeyCode::Char('q')))];
+        run_loop(&mut terminal, &mut app, &mut Scripted(VecDeque::from(script)), &updates).expect("the loop ends");
+        assert_eq!(terminal.get_frame().count(), 2);
     }
 
     #[test]

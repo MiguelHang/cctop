@@ -43,6 +43,7 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 - 014 `cctop open` y la acción `cctop` en todos los contextos.
 - 015 workflow de release con binarios para los cuatro targets y `[download.<target>]` en el manifiesto.
 - 016 validación del MVP en cornercase real (Linux; macOS vía CI) y medida de CPU en reposo.
+- 017 CPU en reposo: muestra de `/proc` más barata, `status` cada 10 s, dibujar solo al cambiar.
 - **Entrega**: `cornercase plugin install MiguelHang/cctop` instala el binario descargado y todo lo anterior funciona.
 
 ## Grafo de dependencias y oleadas paralelas
@@ -67,6 +68,7 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 | 4 | 010 ∥ 013 ∥ 015 | 008+009+005 / 008+005 / 014 |
 | 5 | 011 ∥ 012 | 010 (012 también 007) |
 | 6 | 016 | todo |
+| 7 | 017 | 016 (medida) |
 
 Ficheros compartidos que todas tocan (fuente de conflictos al trabajar en paralelo): `Cargo.toml`
 (dependencias), `Cargo.lock`, `CHANGELOG.md`, `src/lib.rs`. 001 declara ya todos los módulos para

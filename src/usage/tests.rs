@@ -349,3 +349,46 @@ mod hot_path {
         assert_eq!(hot_pids(&pane(&tree, 1).processes), Vec::<Pid>::new());
     }
 }
+
+mod cycle_cost {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::procs::{ProcessSource, cpu_percent, system};
+
+    const CYCLES: u32 = 50;
+    const INTERVAL: Duration = Duration::from_secs(2);
+
+    fn status() -> String {
+        std::env::var_os("CCTOP_CYCLE_STATUS")
+            .map_or_else(|| STATUS.to_owned(), |path| std::fs::read_to_string(path).expect("read the status file"))
+    }
+
+    fn own_cpu_time(sample: &Sample) -> Duration {
+        let pid = std::process::id();
+        sample.processes.iter().find(|process| process.pid == pid).expect("the test process is listed").cpu_time
+    }
+
+    #[test]
+    #[ignore = "measures this machine; run with --ignored --nocapture, CCTOP_CYCLE_STATUS=<status --json file>"]
+    fn sampling_and_building_the_tree_stays_under_one_percent_of_the_interval() {
+        let snapshot = Snapshot::parse(&status()).expect("parse the status");
+        let source = system();
+        let first = source.sample().expect("take the first sample");
+        let (mut previous, mut tree) = (first.clone(), Tree::default());
+        for _ in 0..CYCLES {
+            let next = source.sample().expect("take a sample");
+            tree = build(&snapshot, &next, &cpu_percent(&previous, &next), Some(Sort::Memory));
+            previous = next;
+        }
+        let wall = previous.taken.saturating_duration_since(first.taken) / CYCLES;
+        let cpu = own_cpu_time(&previous).saturating_sub(own_cpu_time(&first)) / CYCLES;
+        let share = cpu.as_secs_f64() / INTERVAL.as_secs_f64() * 100.0;
+        println!(
+            "{} processes, {} panes: {cpu:?} cpu and {wall:?} wall per cycle, {share:.2} % of a {INTERVAL:?} interval",
+            previous.processes.len(),
+            panes(&tree).len()
+        );
+        assert!(share < 1.0, "a cycle costs {share:.2} % of the interval");
+    }
+}
