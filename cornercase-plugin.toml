@@ -8,3 +8,9 @@ permissions = ["read", "notify", "open"]
 
 [[build]]
 command = ["cargo", "build", "--release", "--locked"]
+
+[[actions]]
+id = "cctop"
+title = "cctop"
+contexts = ["project", "workspace", "tab", "pane"]
+command = ["target/release/cctop", "open"]
