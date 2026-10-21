@@ -1,4 +1,5 @@
 mod input;
+mod kill;
 mod sampler;
 mod state;
 mod terminal;
@@ -13,6 +14,7 @@ use ratatui::crossterm::event::Event;
 use ratatui::{Frame, Terminal};
 
 use input::Flow;
+use kill::Prompt;
 use sampler::{Reading, Sampler, Update};
 use state::State;
 use terminal::{Crossterm, Events, Screen};
@@ -21,7 +23,7 @@ use view::Line;
 use crate::config::{self, Loaded};
 use crate::cornercase::{Client, CommandRunner};
 use crate::error::Result;
-use crate::procs;
+use crate::procs::{self, Killer};
 use crate::ui::{self, Header, Hits, View};
 use crate::usage::{self, Tree};
 
@@ -33,7 +35,8 @@ pub(crate) fn run_tui() -> Result<()> {
     let Loaded { config, warnings } = config::load_system();
     let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system());
     let running = sampler::spawn(sampler, config.interval);
-    let mut app = App::new(Some(state::from_config(config.sort)), config.interval, Instant::now());
+    let sort = Some(state::from_config(config.sort));
+    let mut app = App::new(sort, config.interval, Instant::now(), Box::new(procs::Signal));
     app.notice = warnings.into_iter().next();
     let mut screen = Screen::enter()?;
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
@@ -73,10 +76,13 @@ pub(crate) struct App {
     notice: Option<String>,
     interval: Duration,
     answered: Instant,
+    prompt: Option<Prompt>,
+    killer: Box<dyn Killer>,
+    cctop_group: Option<procs::Pid>,
 }
 
 impl App {
-    fn new(sort: Option<usage::Sort>, interval: Duration, now: Instant) -> Self {
+    fn new(sort: Option<usage::Sort>, interval: Duration, now: Instant, killer: Box<dyn Killer>) -> Self {
         Self {
             state: State::new(sort),
             reading: None,
@@ -87,6 +93,9 @@ impl App {
             notice: None,
             interval,
             answered: now,
+            prompt: None,
+            killer,
+            cctop_group: procs::own_group(),
         }
     }
 
@@ -110,6 +119,9 @@ impl App {
     }
 
     fn handle(&mut self, event: &Event) -> Flow {
+        if self.prompt.is_some() {
+            return self.answer(event);
+        }
         let sort = self.state.sort;
         let flow = input::handle(&mut self.state, &self.lines, &self.hits, event);
         if matches!(event, Event::Key(_) | Event::Mouse(_)) {
@@ -119,6 +131,10 @@ impl App {
             self.relayout();
         } else {
             self.rebuild();
+        }
+        if flow == Flow::Kill {
+            self.ask_kill();
+            return Flow::Continue;
         }
         flow
     }
@@ -140,7 +156,8 @@ impl App {
     fn view(&self) -> View {
         let error = self.error.clone().or_else(|| self.notice.clone());
         let header = Header { memory: self.tree.totals.memory, cpu: self.tree.totals.cpu, error };
-        view::view(&self.state, &self.lines, header)
+        let dialog = self.prompt.as_ref().map(|prompt| prompt.dialog.clone());
+        View { dialog, ..view::view(&self.state, &self.lines, header) }
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {

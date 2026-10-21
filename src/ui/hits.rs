@@ -1,5 +1,6 @@
 use ratatui::layout::{Position, Rect};
 
+use super::dialog::Button;
 use super::view::{Sort, ViewTab};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,6 +9,7 @@ pub(crate) enum Hit {
     Sort(Sort),
     Row(usize),
     Fold(usize),
+    Button(Button),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

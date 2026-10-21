@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 use rstest::rstest;
 
-use super::{Header, Hit, Hits, Row, RowKind, Sort, View, ViewTab, render};
+use super::{Button, Dialog, Header, Hit, Hits, Row, RowKind, Sort, View, ViewTab, render};
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const MIB: u64 = 1024 * 1024;
@@ -54,6 +54,7 @@ fn sample_view() -> View {
         selected: Some(8),
         sort: Sort::Memory,
         header: Header { memory: Some(6 * GIB + 120 * MIB), cpu: Some(314.0), error: None },
+        dialog: None,
     }
 }
 
@@ -225,5 +226,54 @@ mod narrow {
     fn small_terminals_draw_without_panicking(#[case] width: u16, #[case] height: u16) {
         let view = View { scroll: 100, ..sample_view() };
         draw(&view, width, height);
+    }
+}
+
+mod dialog {
+    use super::*;
+
+    fn asking() -> View {
+        let dialog = Dialog {
+            process: "cargo test --locked".to_owned(),
+            pid: 4242,
+            pgid: 4200,
+            pane: "%3 claude".to_owned(),
+            focus: Button::Process,
+        };
+        View { dialog: Some(dialog), ..sample_view() }
+    }
+
+    #[test]
+    fn names_the_process_its_pid_and_its_pane_over_the_tree() {
+        let mut terminal = Terminal::new(TestBackend::new(100, 20)).expect("test terminal");
+        terminal.draw(|frame| drop(render(frame, &asking()))).expect("draw");
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[rstest]
+    #[case::cancel(28, 11, Some(Hit::Button(Button::Cancel)))]
+    #[case::process(38, 11, Some(Hit::Button(Button::Process)))]
+    #[case::group(50, 11, Some(Hit::Button(Button::Group)))]
+    #[case::the_dialog_text(30, 8, None)]
+    #[case::a_row_outside_the_dialog(5, 2, None)]
+    #[case::a_tab(2, 0, None)]
+    fn only_its_buttons_can_be_clicked(#[case] column: u16, #[case] row: u16, #[case] expected: Option<Hit>) {
+        let (_, hits) = draw(&asking(), 100, 20);
+        assert_eq!(hits.at(column, row), expected);
+    }
+
+    #[test]
+    fn the_focused_button_is_reversed() {
+        let (buffer, _) = draw(&asking(), 100, 20);
+        assert!(buffer[(38, 11)].modifier.contains(Modifier::REVERSED));
+        assert!(!buffer[(28, 11)].modifier.contains(Modifier::REVERSED));
+    }
+
+    #[rstest]
+    #[case::empty(0, 0)]
+    #[case::narrow(12, 20)]
+    #[case::short(100, 4)]
+    fn small_terminals_draw_it_without_panicking(#[case] width: u16, #[case] height: u16) {
+        draw(&asking(), width, height);
     }
 }
