@@ -36,3 +36,13 @@ dinámica desde el último `compact_boundary`, agrupada por archivo, comando y c
 
 ## Notas
 - Puro, sin I/O: 007 le da las líneas. Leer `design/context-use.md` de cornercase para el total.
+
+## Formato observado (Claude Code 2.1.306) — fixtures sintéticas
+Las fixtures se escriben a mano (nunca copiar transcripts reales: tienen datos personales). Forma de cada línea JSONL relevante (campos extra existen y se ignoran):
+- `{"type":"attachment","isSidechain":false,"attachment":{"type":"instructions","files":[{"path":"/repo/CLAUDE.md","type":"Project","content":"@AGENTS.md\n\n@DESIGN.md"},{"path":"/repo/AGENTS.md","type":"Project","content":"…"}]},"uuid":"…","timestamp":"…","sessionId":"…","version":"2.1.306"}`
+- `{"type":"attachment","attachment":{"type":"skill_listing","content":"- skill: …"}}`; también `deferred_tools_delta` (`addedNames`: [..]), `mcp_instructions_delta` (`addedNames`, `addedBlocks`: [texto]), `agent_listing_delta` (`addedTypes`, `addedLines`), `prompt_snapshot` (`systemPrompt`: [texto,…]).
+- Usuario: `{"type":"user","isSidechain":false,"message":{"role":"user","content":"texto"}}` o `content` = lista de bloques `{"type":"tool_result","tool_use_id":"toolu_…","content":"texto" | [{"type":"text","text":"…"}]}`.
+- Asistente: `{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","content":[{"type":"thinking","thinking":"","signature":"…"},{"type":"text","text":"…"},{"type":"tool_use","id":"toolu_…","name":"Read","input":{"file_path":"/repo/DESIGN.md"}}],"usage":{"input_tokens":3,"cache_creation_input_tokens":1200,"cache_read_input_tokens":45000,"output_tokens":300}}}`. Tools: `Read`/`Edit`/`Write` (`input.file_path`), `Bash` (`input.command`), `Grep`/`Glob` (`input.pattern`, `input.path`), `Agent`/`Task` (resultado de subagente).
+- Compactación: `{"type":"system","subtype":"compact_boundary",…}`. Otros `system` (`stop_hook_summary`, `turn_duration`) se ignoran.
+- Ignorar: `api-request`, `api-request-blob`, `api-request-shape`, `last-prompt`, `mode`, `permission-mode`, `ai-title`, `file-history-snapshot`, `queue-operation`, y attachments de otros tipos (`hook_success`, `date`, `environment`…). `model` dice el modelo.
+- Líneas con `isSidechain: true` se excluyen.

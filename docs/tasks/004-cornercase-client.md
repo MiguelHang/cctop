@@ -37,3 +37,6 @@ públicos que usan el TUI, la acción y las alertas, sin arrancar nunca cornerca
 ## Notas
 - Comprueba los nombres de los campos y flags en el repo de cornercase (`src/control/`, `src/cli/`), no los adivines.
 - Variante de error `Command { argv, stderr }` y `Json` en `error.rs`.
+
+## Fixtures
+Sintéticas, escritas a mano (sin datos reales de la máquina). La forma de `status --json` está en ../cornercase/src/control/status.rs (`Report`, `PaneInfo`…) y en su `design/commands-for-scripts-and-agents/status.md`. Raíz: `boot` (string `"<pid>-<ns>"`), `projects[]` → `{id,name,path,group,workspaces[]}` → `{id,name,branch,path,worktree?,tabs[]}` → `{id,name,panes[]}` → `{id,agent,status,model,context,subagents,parent,path,program,…}`. Ignorar campos desconocidos.
