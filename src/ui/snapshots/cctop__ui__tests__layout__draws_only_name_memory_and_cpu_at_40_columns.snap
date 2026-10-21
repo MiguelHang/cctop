@@ -1,0 +1,12 @@
+---
+source: src/ui/tests.rs
+expression: terminal.backend()
+---
+" Processes  Context          mem 6.1 GB "
+"Name                     Memory ▼    CPU"
+"▾ cctop                    6.0 GB   1.5%"
+"  ▸ main                   300 MB   1.5%"
+"  ▾ task/009-ui-proces…    5.0 GB   1.5%"
+"    ▾ build                5.0 GB   1.5%"
+"      ▾ %3 claude          5.0 GB   312%"
+"        ▾ zsh              4.0 MB   1.5%"

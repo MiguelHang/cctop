@@ -1,4 +1,5 @@
 pub mod error;
+#[cfg_attr(not(test), expect(dead_code, reason = "only ui uses it until the app draws ui in task 010"))]
 mod format;
 mod paths;
 
@@ -11,6 +12,7 @@ mod procs;
 mod usage;
 
 mod app;
+#[cfg_attr(not(test), expect(dead_code, unused_imports, reason = "the app draws it from task 010"))]
 mod ui;
 
 #[cfg(test)]
