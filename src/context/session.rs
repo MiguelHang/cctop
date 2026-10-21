@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::paths::absolute;
 
-const CONFIG_ENV: &str = "CLAUDE_CONFIG_DIR";
+pub(crate) const CONFIG_ENV: &str = "CLAUDE_CONFIG_DIR";
 const DIR_NAME_MAX: usize = 200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,6 @@ pub(crate) struct Session {
     cwd: PathBuf,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the app reads each claude's environment, task 012"))]
 pub(crate) fn config_dir(env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     absolute(&env, CONFIG_ENV).or_else(|| absolute(&env, "HOME").map(|home| home.join(".claude")))
 }

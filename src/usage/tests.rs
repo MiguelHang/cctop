@@ -4,7 +4,7 @@ use std::time::Instant;
 use rstest::rstest;
 use serde::Deserialize;
 
-use super::{PaneNode, ProcessNode, Sort, Totals, Tree, build};
+use super::{PaneNode, ProcessNode, Sort, Totals, Tree, build, pane_processes};
 use crate::cornercase::Snapshot;
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::fixture;
@@ -183,6 +183,25 @@ mod assignment {
         let empty = pane(&tree, 5);
         assert_eq!(empty.processes, []);
         assert_eq!(empty.totals, Totals::default());
+    }
+}
+
+mod pane_processes {
+    use super::*;
+
+    #[test]
+    fn lists_a_pane_tree_parents_first_in_pid_order() {
+        let processes = vec![
+            process(10, Some(1), Some(1), Some(BOOT)),
+            process(13, Some(10), None, None),
+            process(11, Some(10), None, None),
+            process(12, Some(11), None, None),
+            process(20, Some(1), Some(2), Some(BOOT)),
+        ];
+        let sample = Sample { taken: Instant::now(), processes };
+        let pids: Vec<Pid> =
+            pane_processes(&snapshot_with_panes(&[1, 2]), &sample, 1).iter().map(|process| process.pid).collect();
+        assert_eq!(pids, [10, 11, 12, 13]);
     }
 }
 

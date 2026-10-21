@@ -24,11 +24,19 @@ pub(crate) struct State {
     pub(super) folded: HashSet<RowId>,
     pub(super) scroll: usize,
     pub(super) page: usize,
+    pub(super) context_scroll: usize,
 }
 
 impl State {
     pub(super) fn new(sort: Option<Sort>) -> Self {
         Self { sort, page: 1, ..Self::default() }
+    }
+
+    pub(super) fn pane(&self) -> Option<u64> {
+        match self.selected? {
+            RowId::Pane(pane) | RowId::Process { pane, .. } => Some(pane),
+            RowId::Project(_) | RowId::Workspace(_) | RowId::Tab(_) => None,
+        }
     }
 
     pub(super) fn index(&self, lines: &[Line]) -> Option<usize> {

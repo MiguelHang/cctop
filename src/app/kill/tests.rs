@@ -5,6 +5,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use rstest::rstest;
 
+use super::super::sampler::Update;
 use super::super::tests::{app_killing_with, click, draw, find, first_sample, index_of, key, mouse, process, reading};
 use super::{ENDED, ITSELF, ONLY_PROCESSES};
 use crate::app::state::RowId;
@@ -176,7 +177,7 @@ mod answering {
         let (mut app, killer) = asked();
         let mut next = sample();
         next.processes.retain(|process| process.pid != 101);
-        app.update(Ok(reading(next)), Instant::now());
+        app.update(Update::Reading(Ok(reading(next))), Instant::now());
         app.handle(&key(KeyCode::Enter));
         assert_eq!(killer.sent(), []);
         assert_eq!(app.view().header.error.as_deref(), Some(ENDED));
@@ -187,7 +188,7 @@ mod answering {
         let (mut app, killer) = asked();
         let mut next = sample();
         next.processes.iter_mut().filter(|process| process.pid == 101).for_each(|process| process.started = 7);
-        app.update(Ok(reading(next)), Instant::now());
+        app.update(Update::Reading(Ok(reading(next))), Instant::now());
         app.handle(&key(KeyCode::Enter));
         assert_eq!(killer.sent(), []);
     }
@@ -197,7 +198,7 @@ mod answering {
         let (mut app, killer) = asked();
         let mut next = sample();
         next.processes.iter_mut().filter(|process| process.pid == 101).for_each(|process| process.pgid = 101);
-        app.update(Ok(reading(next)), Instant::now());
+        app.update(Update::Reading(Ok(reading(next))), Instant::now());
         click_on(&mut app, "[Group]");
         assert_eq!(killer.sent(), []);
         assert_eq!(app.view().header.error.as_deref(), Some(ENDED));

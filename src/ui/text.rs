@@ -19,9 +19,27 @@ pub(super) fn fit(text: &str, max: u16) -> String {
     if width(text) <= max {
         return text.to_owned();
     }
-    let mut kept = String::new();
+    let mut kept: String = keep(text.chars(), max).into_iter().collect();
+    if max > 0 {
+        kept.push(ELLIPSIS);
+    }
+    kept
+}
+
+pub(super) fn fit_start(text: &str, max: u16) -> String {
+    if width(text) <= max {
+        return text.to_owned();
+    }
+    let kept = keep(text.chars().rev(), max);
+    let mut shown = if max > 0 { ELLIPSIS.to_string() } else { String::new() };
+    shown.extend(kept.into_iter().rev());
+    shown
+}
+
+fn keep(characters: impl Iterator<Item = char>, max: u16) -> Vec<char> {
+    let mut kept = Vec::new();
     let mut used = 0;
-    for character in text.chars() {
+    for character in characters {
         let next = used + width(character.encode_utf8(&mut [0; 4]));
         if next >= max {
             break;
@@ -29,13 +47,13 @@ pub(super) fn fit(text: &str, max: u16) -> String {
         used = next;
         kept.push(character);
     }
-    if max > 0 {
-        kept.push(ELLIPSIS);
-    }
     kept
 }
 
 pub(super) fn put(buffer: &mut Buffer, area: Rect, text: &str, align: Align, style: Style) {
+    if area.height == 0 {
+        return;
+    }
     let shown = fit(text, area.width);
     let x = match align {
         Align::Left => area.x,

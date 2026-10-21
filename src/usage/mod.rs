@@ -86,6 +86,17 @@ pub(crate) fn build(snapshot: &Snapshot, sample: &Sample, cpu: &HashMap<Pid, f64
     tree
 }
 
+pub(crate) fn pane_processes<'a>(snapshot: &Snapshot, sample: &'a Sample, pane: u64) -> Vec<&'a Process> {
+    let assignment = Assignment::new(snapshot.boot.as_deref(), &sample.processes);
+    let mut found = Vec::new();
+    let mut pending: Vec<&Process> = assignment.roots(pane).into_iter().rev().collect();
+    while let Some(process) = pending.pop() {
+        found.push(process);
+        pending.extend(assignment.children(pane, process.pid).into_iter().rev());
+    }
+    found
+}
+
 struct Builder<'a> {
     assignment: &'a Assignment<'a>,
     cpu: &'a HashMap<Pid, f64>,

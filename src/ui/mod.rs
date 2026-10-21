@@ -1,3 +1,4 @@
+mod context;
 mod dialog;
 mod hits;
 mod table;
@@ -9,9 +10,12 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
+pub(crate) use context::scroll_max as context_scroll_max;
 pub(crate) use dialog::{Button, Dialog};
 pub(crate) use hits::{Hit, Hits};
-pub(crate) use view::{Header, Row, RowKind, Sort, View, ViewTab};
+pub(crate) use view::{
+    ContextPart, ContextPercent, ContextSession, ContextView, Header, Row, RowKind, Sort, View, ViewTab,
+};
 
 use text::{Align, put, width};
 
@@ -29,8 +33,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
     let tabs_end = draw_tabs(buffer, area, view.tab, &mut hits);
     draw_summary(buffer, Rect { x: tabs_end, width: area.right().saturating_sub(tabs_end), height: 1, ..area }, view);
     let body = Rect { y: area.y + 1, height: area.height - 1, ..area };
-    if view.tab == ViewTab::Processes {
-        table::draw(buffer, body, view, &mut hits);
+    match view.tab {
+        ViewTab::Processes => table::draw(buffer, body, view, &mut hits),
+        ViewTab::Context => context::draw(buffer, body, &view.context),
     }
     if let Some(dialog) = &view.dialog {
         hits = dialog::draw(buffer, area, dialog);

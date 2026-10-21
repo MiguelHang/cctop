@@ -1,13 +1,7 @@
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the transcript reader and the context view, tasks 007 and 012")
-)]
 pub(crate) mod breakdown;
+#[cfg(test)]
+pub(crate) mod fake;
 mod reader;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "read by the transcript reader and the context view, tasks 007 and 012")
-)]
 pub(crate) mod record;
 pub(crate) mod session;
 
@@ -28,7 +22,6 @@ pub(crate) struct Sessions {
     readers: HashMap<u32, (String, TranscriptReader)>,
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "the context view reads the sessions, task 012"))]
 impl Sessions {
     pub(crate) fn read(&mut self, claudes: &[Claude]) -> HashMap<u32, Breakdown> {
         self.readers.retain(|pid, _| claudes.iter().any(|claude| claude.pid == *pid));

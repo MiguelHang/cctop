@@ -1,0 +1,8 @@
+---
+source: src/ui/context/tests.rs
+expression: "draw(context, 80, 4).backend()"
+---
+" Processes  Context                                           mem 1.0 GB  cpu — "
+"Select a pane in Processes to see what fills its Claude context.                "
+"                                                                                "
+"                                                                                "

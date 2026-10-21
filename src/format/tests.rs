@@ -1,6 +1,6 @@
 use rstest::rstest;
 
-use super::{bytes, estimated, or_missing, percent};
+use super::{bytes, estimated, or_missing, percent, thousands, tokens};
 
 mod sizes {
     use super::*;
@@ -51,5 +51,28 @@ mod estimates {
     #[case::missing_is_never_estimated("—", true, "—")]
     fn are_marked_with_an_approximation_sign(#[case] text: &str, #[case] is_estimate: bool, #[case] expected: &str) {
         assert_eq!(estimated(text.to_owned(), is_estimate), expected);
+    }
+}
+
+mod token_counts {
+    use super::*;
+
+    #[rstest]
+    #[case::small(950, "950")]
+    #[case::thousands_with_a_decimal(61_535, "61.5k")]
+    #[case::hundreds_of_thousands(615_000, "615k")]
+    #[case::millions(1_240_000, "1.2M")]
+    #[case::whole_millions(1_000_000, "1M")]
+    fn are_shortened_by_size(#[case] value: u64, #[case] expected: &str) {
+        assert_eq!(tokens(value), expected);
+    }
+
+    #[rstest]
+    #[case::zero(0, "0")]
+    #[case::three_digits(999, "999")]
+    #[case::four_digits(1000, "1,000")]
+    #[case::millions(1_234_567, "1,234,567")]
+    fn are_grouped_by_thousands(#[case] value: u64, #[case] expected: &str) {
+        assert_eq!(thousands(value), expected);
     }
 }

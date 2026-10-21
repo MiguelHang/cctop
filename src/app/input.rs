@@ -63,11 +63,7 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
 
 fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) -> Flow {
     if state.tab != ViewTab::Processes {
-        if let (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) =
-            (mouse.kind, hits.at(mouse.column, mouse.row))
-        {
-            state.tab = tab;
-        }
+        context_mouse(state, hits, mouse);
         return Flow::Continue;
     }
     match mouse.kind {
@@ -84,6 +80,15 @@ fn right_click(state: &mut State, lines: &[Line], hit: Option<Hit>) -> Flow {
     let Some(Hit::Row(index) | Hit::Fold(index)) = hit else { return Flow::Continue };
     state.select(lines, index);
     Flow::Kill
+}
+
+fn context_mouse(state: &mut State, hits: &Hits, mouse: MouseEvent) {
+    match (mouse.kind, hits.at(mouse.column, mouse.row)) {
+        (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) => state.tab = tab,
+        (MouseEventKind::ScrollDown, _) => state.context_scroll = state.context_scroll.saturating_add_signed(WHEEL),
+        (MouseEventKind::ScrollUp, _) => state.context_scroll = state.context_scroll.saturating_add_signed(-WHEEL),
+        _ => {}
+    }
 }
 
 fn click(state: &mut State, lines: &[Line], hit: Option<Hit>) {
