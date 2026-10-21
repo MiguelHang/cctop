@@ -1,3 +1,4 @@
+mod dialog;
 mod hits;
 mod table;
 mod text;
@@ -8,6 +9,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
+pub(crate) use dialog::{Button, Dialog};
 pub(crate) use hits::{Hit, Hits};
 pub(crate) use view::{Header, Row, RowKind, Sort, View, ViewTab};
 
@@ -29,6 +31,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
     let body = Rect { y: area.y + 1, height: area.height - 1, ..area };
     if view.tab == ViewTab::Processes {
         table::draw(buffer, body, view, &mut hits);
+    }
+    if let Some(dialog) = &view.dialog {
+        hits = dialog::draw(buffer, area, dialog);
     }
     hits
 }

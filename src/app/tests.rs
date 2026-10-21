@@ -14,7 +14,7 @@ use super::{App, Flow, run_loop};
 use crate::cornercase::fake::FakeRunner;
 use crate::cornercase::{Client, Snapshot};
 use crate::error::Result;
-use crate::procs::fake::FakeSource;
+use crate::procs::fake::{FakeKiller, FakeSource};
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::fixture;
 use crate::ui::{Sort, ViewTab};
@@ -25,7 +25,7 @@ const BOOT: &str = "4242-1700000000000000000";
 const MB: u64 = 1_000_000;
 const INTERVAL: Duration = Duration::from_secs(2);
 
-fn process(pid: Pid, parent: Pid, pane: u64, memory: u64, cpu_seconds: u64) -> Process {
+pub(super) fn process(pid: Pid, parent: Pid, pane: u64, memory: u64, cpu_seconds: u64) -> Process {
     Process {
         pid,
         ppid: Some(parent),
@@ -66,13 +66,17 @@ pub(super) fn fake_sampler() -> Sampler<FakeRunner, FakeSource> {
     Sampler::new(Client::new(runner), FakeSource::new([first_sample(now), second_sample(now)]))
 }
 
-fn reading(sample: Sample) -> Reading {
+pub(super) fn reading(sample: Sample) -> Reading {
     let snapshot = Snapshot::parse(STATUS).expect("parse the status fixture");
     Reading { snapshot, sample, cpu: std::collections::HashMap::new() }
 }
 
 fn app_with(sample: Sample, sort: Option<usage::Sort>) -> App {
-    let mut app = App::new(sort, INTERVAL, Instant::now());
+    app_killing_with(sample, sort, FakeKiller::default())
+}
+
+pub(super) fn app_killing_with(sample: Sample, sort: Option<usage::Sort>, killer: FakeKiller) -> App {
+    let mut app = App::new(sort, INTERVAL, Instant::now(), Box::new(killer));
     app.update(Ok(reading(sample)), Instant::now());
     app
 }
@@ -81,17 +85,17 @@ fn labels(app: &App) -> Vec<String> {
     app.view().rows.into_iter().map(|row| row.label).collect()
 }
 
-fn index_of(app: &App, id: RowId) -> usize {
+pub(super) fn index_of(app: &App, id: RowId) -> usize {
     app.lines.iter().position(|line| line.id == id).expect("the row is visible")
 }
 
-fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
+pub(super) fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
     terminal.draw(|frame| app.draw(frame)).expect("draw");
     terminal.backend().buffer().clone()
 }
 
-fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
+pub(super) fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
     (0..buffer.area.height)
         .find_map(|y| {
             let line: String = (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect();
@@ -101,15 +105,15 @@ fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
         .expect("the text is on screen")
 }
 
-fn click(column: u16, row: u16) -> Event {
+pub(super) fn click(column: u16, row: u16) -> Event {
     mouse(MouseEventKind::Down(MouseButton::Left), column, row)
 }
 
-fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
+pub(super) fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {
     Event::Mouse(MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE })
 }
 
-fn key(code: KeyCode) -> Event {
+pub(super) fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::from(code))
 }
 
@@ -119,7 +123,7 @@ mod ticking {
     #[test]
     fn a_tick_with_fakes_gives_the_tree_in_cornercase_order() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         app.update(sampler.tick(), Instant::now());
         let expected = [
             "notes",
@@ -148,7 +152,7 @@ mod ticking {
     #[test]
     fn the_second_tick_brings_cpu() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         app.update(sampler.tick(), Instant::now());
         assert_eq!(app.view().header.cpu, None);
         app.update(sampler.tick(), Instant::now());
@@ -171,7 +175,7 @@ mod ticking {
     #[test]
     fn a_status_that_never_answers_is_reported_after_three_intervals() {
         let start = Instant::now();
-        let mut app = App::new(None, INTERVAL, start);
+        let mut app = App::new(None, INTERVAL, start, Box::new(FakeKiller::default()));
         app.check_stale(start + Duration::from_secs(6));
         assert_eq!(app.view().header.error, None);
         app.check_stale(start + Duration::from_secs(7));
@@ -310,7 +314,7 @@ mod event_loop {
     #[test]
     fn draws_the_updates_and_q_quits() {
         let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         let (send, updates) = mpsc::channel();
         send.send(Ok(reading(first_sample(Instant::now())))).expect("send the update");
         let mut events = Scripted(VecDeque::from([None, Some(key(KeyCode::Char('q')))]));
@@ -321,7 +325,7 @@ mod event_loop {
 
     #[test]
     fn ctrl_c_quits_too() {
-        let mut app = App::new(None, INTERVAL, Instant::now());
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
         assert_eq!(app.handle(&event), Flow::Quit);
     }

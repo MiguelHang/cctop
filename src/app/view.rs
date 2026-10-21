@@ -24,6 +24,7 @@ pub(super) fn view(state: &State, lines: &[Line], header: Header) -> View {
         selected: state.index(lines),
         sort: column(state.sort),
         header,
+        dialog: None,
     }
 }
 

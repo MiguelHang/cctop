@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use super::environ::parse_environ;
-use super::{Pid, Process, ProcessSource, Sample};
+use super::{Identity, Pid, Process, ProcessSource, Sample};
 use crate::error::Result;
 
 const DEFAULT_TICKS_PER_SECOND: u64 = 100;
@@ -64,6 +64,11 @@ impl ProcessSource for LinuxSource {
             .collect();
         Ok(Sample { taken, processes })
     }
+}
+
+pub(crate) fn identity(pid: Pid) -> Option<Identity> {
+    let stat = parse_stat(&String::from_utf8_lossy(&fs::read(format!("/proc/{pid}/stat")).ok()?))?;
+    Some(Identity { started: stat.started, pgid: stat.pgid })
 }
 
 fn current_uid() -> u32 {
