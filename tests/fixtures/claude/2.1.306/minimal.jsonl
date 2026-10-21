@@ -1,0 +1,2 @@
+{"type":"attachment","isSidechain":false,"attachment":{"type":"instructions","files":[{"path":"/repo/CLAUDE.md","type":"Project","content":"Run the tests before you finish."}]},"version":"2.1.306"}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"Hello there"}}
