@@ -1,0 +1,25 @@
+{
+  "future_root_field": { "anything": [1, 2, 3] },
+  "projects": [
+    {
+      "id": 9,
+      "future_project_field": true,
+      "group": 99,
+      "workspaces": [
+        {
+          "id": 10,
+          "future_workspace_field": "x",
+          "tabs": [
+            {
+              "id": 11,
+              "panes": [
+                { "id": 12, "future_pane_field": { "nested": null } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    { "id": 13 }
+  ]
+}

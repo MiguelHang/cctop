@@ -1,0 +1,212 @@
+{
+  "boot": "4242-1700000000000000000",
+  "caller": 7,
+  "groups": [
+    { "collapsed": false, "colour": 3, "icon": "", "id": 1, "name": "work" }
+  ],
+  "projects": [
+    {
+      "active": false,
+      "collapsed": false,
+      "custom_name": null,
+      "group": 1,
+      "id": 2,
+      "name": "shop",
+      "path": "/home/user/src/shop",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 3,
+          "name": "main",
+          "path": "/home/user/src/shop",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 4,
+              "layout": null,
+              "name": "shell",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": null,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 5,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/user/src/shop",
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    },
+    {
+      "active": true,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 1,
+      "name": "notes",
+      "path": "/home/user/src/notes",
+      "workspaces": [
+        {
+          "active": false,
+          "behind": 2,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 1,
+          "name": "main",
+          "path": "/home/user/src/notes",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 1,
+              "layout": null,
+              "name": "claude",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": false,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": 42,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 1,
+                  "model": "opus",
+                  "parent": null,
+                  "path": "/home/user/src/notes",
+                  "program": "claude",
+                  "resumes": true,
+                  "resuming": false,
+                  "role": null,
+                  "status": "working",
+                  "subagents": 2,
+                  "survey": false,
+                  "title": "notes"
+                },
+                {
+                  "active": false,
+                  "agent": null,
+                  "at_prompt": null,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 2,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/user/src/notes",
+                  "program": "cargo",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "working"
+            },
+            {
+              "active": false,
+              "custom_name": "logs",
+              "id": 2,
+              "layout": null,
+              "name": "logs",
+              "panes": [],
+              "status": null
+            }
+          ],
+          "worktree": false
+        },
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "feature-x",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 2,
+          "name": "feature-x",
+          "path": "/home/user/worktrees/notes/feature-x",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 3,
+              "layout": null,
+              "name": "claude",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": true,
+                  "context": 7,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 7,
+                  "model": "sonnet",
+                  "parent": 1,
+                  "path": "/home/user/worktrees/notes/feature-x",
+                  "program": "claude",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": "coder",
+                  "status": "idle",
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "idle"
+            }
+          ],
+          "worktree": true
+        }
+      ]
+    }
+  ],
+  "shown": { "pane": 1, "project": 1, "tab": 1, "workspace": 1 },
+  "version": "0.12.173"
+}
