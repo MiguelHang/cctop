@@ -1,6 +1,6 @@
 # 012 — Vista de contexto
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 007, 010
 - **Paralelo con**: 011, 013, 015
 - **Estimación**: ~600 líneas (código ~330, tests ~270)

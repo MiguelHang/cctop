@@ -1,6 +1,6 @@
 # 009 — UI: vista de procesos
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001
 - **Paralelo con**: 002, 003, 004, 005, 006, 007, 008, 014 (solo toca `ui/` y `format.rs`)
 - **Estimación**: ~650 líneas (código ~350, tests ~150, snapshots excluidos)

@@ -1,6 +1,6 @@
 # 008 — Árbol de uso
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 002 (tipos de `procs`), 004 (`Snapshot`)
 - **Paralelo con**: 003, 005, 007, 009, 014
 - **Estimación**: ~600 líneas (código ~300, tests ~300)

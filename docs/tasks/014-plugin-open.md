@@ -1,6 +1,6 @@
 # 014 — `cctop open` y la acción del plugin
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 004
 - **Paralelo con**: 003, 005, 007, 008, 009, 010, 013
 - **Estimación**: ~350 líneas (código ~150, tests ~200)

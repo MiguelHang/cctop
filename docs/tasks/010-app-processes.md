@@ -1,6 +1,6 @@
 # 010 — App: bucle, muestreo e interacción de la vista de procesos
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 004, 005, 008, 009 (y 002 en Linux / 003 para macOS)
 - **Paralelo con**: 013, 015
 - **Estimación**: ~750 líneas (código ~450, tests ~300)

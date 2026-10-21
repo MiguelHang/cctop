@@ -1,6 +1,6 @@
 # 004 — Cliente de cornercase
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 001
 - **Paralelo con**: 002, 003, 005, 006, 007, 009
 - **Estimación**: ~500 líneas (código ~280, tests ~150, fixtures aparte)

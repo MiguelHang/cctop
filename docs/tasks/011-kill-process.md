@@ -1,17 +1,17 @@
 # 011 — Matar un proceso o su grupo
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 010
 - **Paralelo con**: 012, 013, 015
 - **Estimación**: ~400 líneas (código ~200, tests ~200)
 
 ## Objetivo
-`k` (o el menú de la fila) mata un proceso o su grupo tras confirmar, nombrando el proceso y su pane.
+`k` (o un clic derecho en la fila, que además la selecciona) mata un proceso o su grupo tras confirmar, nombrando el proceso y su pane.
 
 ## Alcance
 - `src/procs/kill.rs`: trait `Killer` (`term(pid)`, `term_group(pgid)`) con implementación real (`SIGTERM`) y fake que registra.
 - `src/ui/dialog.rs`: diálogo de confirmación (proceso, pid, pane; botones `Cancel`, `Process`, `Group`) con sus `Hits`.
-- `src/app/kill.rs`: abrir el diálogo desde `k` o clic derecho/menú, confirmar con clic o `Enter`, cancelar con `Esc`; mientras está abierto, ningún otro clic llega al árbol.
+- `src/app/kill.rs`: abrir el diálogo desde `k` o un clic derecho en la fila (que la selecciona), confirmar con clic o `Enter`, cancelar con `Esc`; mientras está abierto, ningún otro clic llega al árbol.
 - Solo procesos (no filas de proyecto/pane); nunca el propio cctop ni su grupo.
 
 ## Criterios de aceptación
