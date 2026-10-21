@@ -39,7 +39,7 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 - 013 histéresis pura + `cctop watch` + `[[service]]` en el manifiesto.
 - **Entrega**: el aviso del criterio de éxito 1 llega por `cornercase notify`.
 
-### M5 — Plugin y distribución (014–016)
+### M5 — Plugin y distribución (014–017)
 - 014 `cctop open` y la acción `cctop` en todos los contextos.
 - 015 workflow de release con binarios para los cuatro targets y `[download.<target>]` en el manifiesto.
 - 016 validación del MVP en cornercase real (Linux; macOS vía CI) y medida de CPU en reposo.

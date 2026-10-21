@@ -194,13 +194,18 @@ mod launch_cache {
     use crate::procs::Process;
     use fake_proc::{fixture_files, write_process};
 
-    fn started_again(root: &TempDir) -> (LinuxSource, Process) {
+    fn sampled_twice(root: &TempDir) -> (LinuxSource, Process) {
         write_process(root, "4242", &fixture_files());
         let source = LinuxSource::at(root.path().to_owned(), current_uid(), 100);
-        let first = own_process(&source, 4242).expect("first sample");
+        own_process(&source, 4242).expect("first sample");
+        let second = own_process(&source, 4242).expect("second sample");
+        rewrite_launch(root);
+        (source, second)
+    }
+
+    fn rewrite_launch(root: &TempDir) {
         fs::write(root.path().join("4242/cmdline"), b"/usr/bin/other\0").expect("write cmdline");
         fs::write(root.path().join("4242/environ"), b"CORNERCASE_PANE=9\0").expect("write environ");
-        (source, first)
     }
 
     fn replace_in_stat(root: &TempDir, from: &str, to: &str) {
@@ -212,9 +217,9 @@ mod launch_cache {
     #[test]
     fn keeps_the_arguments_and_variables_while_the_process_is_the_same() {
         let root = TempDir::new();
-        let (source, first) = started_again(&root);
+        let (source, first) = sampled_twice(&root);
         fs::write(root.path().join("4242/status"), "PPid:\t4100\nRssAnon:\t10 kB\n").expect("write status");
-        let again = own_process(&source, 4242).expect("second sample");
+        let again = own_process(&source, 4242).expect("third sample");
         assert_eq!((&again.args, again.pane), (&first.args, first.pane));
         assert_eq!(again.memory, Some(10 * 1024));
     }
@@ -224,16 +229,27 @@ mod launch_cache {
     #[case::new_program_in_the_same_process("(tmux: a (b)) c)", "(other)")]
     fn reads_them_again_when_the_start_or_the_name_changes(#[case] from: &str, #[case] to: &str) {
         let root = TempDir::new();
-        let (source, _) = started_again(&root);
+        let (source, _) = sampled_twice(&root);
         replace_in_stat(&root, from, to);
-        let again = own_process(&source, 4242).expect("second sample");
+        let again = own_process(&source, 4242).expect("third sample");
         assert_eq!((again.args, again.pane), (vec!["/usr/bin/other".to_owned()], Some(9)));
+    }
+
+    #[test]
+    fn reads_them_again_on_the_second_sample_of_a_new_process() {
+        let root = TempDir::new();
+        write_process(&root, "4242", &fixture_files());
+        let source = LinuxSource::at(root.path().to_owned(), current_uid(), 100);
+        own_process(&source, 4242).expect("first sample");
+        rewrite_launch(&root);
+        let second = own_process(&source, 4242).expect("second sample");
+        assert_eq!((second.args, second.pane), (vec!["/usr/bin/other".to_owned()], Some(9)));
     }
 
     #[test]
     fn forgets_a_process_that_ended() {
         let root = TempDir::new();
-        let (source, _) = started_again(&root);
+        let (source, _) = sampled_twice(&root);
         fs::rename(root.path().join("4242"), root.path().join("gone")).expect("hide the process");
         assert_eq!(own_process(&source, 4242), None);
         fs::rename(root.path().join("gone"), root.path().join("4242")).expect("bring it back");

@@ -28,6 +28,7 @@ struct Launch {
     name: String,
     args: Vec<String>,
     env: Env,
+    settled: bool,
 }
 
 impl LinuxSource {
@@ -57,10 +58,7 @@ impl LinuxSource {
         } else {
             parse_statm(&read_file(&dir.join("statm"))?, self.page_size)
         };
-        let launch = known
-            .remove(&pid)
-            .filter(|launch| launch.started == stat.started && launch.name == stat.name)
-            .unwrap_or_else(|| launch(&dir, &stat));
+        let launch = known_launch(known.remove(&pid), &dir, &stat);
         let process = Process {
             pid,
             ppid: Some(stat.ppid),
@@ -84,12 +82,21 @@ impl LinuxSource {
     }
 }
 
+fn known_launch(known: Option<Launch>, dir: &Path, stat: &Stat) -> Launch {
+    match known.filter(|launch| launch.started == stat.started && launch.name == stat.name) {
+        Some(launch) if launch.settled => launch,
+        Some(_) => Launch { settled: true, ..launch(dir, stat) },
+        None => launch(dir, stat),
+    }
+}
+
 fn launch(dir: &Path, stat: &Stat) -> Launch {
     Launch {
         started: stat.started,
         name: stat.name.clone(),
         args: read_file(&dir.join("cmdline")).map(|bytes| parse_cmdline(&bytes)).unwrap_or_default(),
         env: read_file(&dir.join("environ")).map(|bytes| parse_environ(&bytes)).unwrap_or_default(),
+        settled: false,
     }
 }
 
