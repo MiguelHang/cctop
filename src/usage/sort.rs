@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use super::{ProcessNode, ProjectNode, Totals, Tree, WorkspaceNode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(not(test), expect(dead_code, reason = "the TUI sorts by CPU from task 010"))]
 pub(crate) enum Sort {
     #[default]
     Memory,

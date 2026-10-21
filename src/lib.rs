@@ -1,5 +1,4 @@
 pub mod error;
-#[cfg_attr(not(test), expect(dead_code, reason = "only ui uses it until the app draws ui in task 010"))]
 mod format;
 mod paths;
 
@@ -7,9 +6,7 @@ mod alerts;
 mod config;
 mod context;
 mod cornercase;
-#[cfg_attr(not(test), expect(dead_code, reason = "usage and alerts read the samples once they land"))]
 mod procs;
-#[cfg_attr(not(test), expect(dead_code, reason = "the app and the alerts build the tree from tasks 010 and 013"))]
 mod usage;
 
 mod app;
@@ -26,6 +23,8 @@ pub fn run_tui() -> Result<()> {
 }
 
 pub fn run_watch() -> Result<()> {
+    let loaded = paths::config_file(paths::system_env).map(|path| config::Config::load(&path)).unwrap_or_default();
+    alerts::serve(&loaded);
     Ok(())
 }
 

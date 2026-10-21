@@ -14,3 +14,7 @@ id = "cctop"
 title = "cctop"
 contexts = ["project", "workspace", "tab", "pane"]
 command = ["target/release/cctop", "open"]
+
+[[service]]
+id = "watch"
+command = ["target/release/cctop", "watch"]

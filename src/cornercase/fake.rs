@@ -40,3 +40,9 @@ impl Runner for FakeRunner {
 fn owned(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| (*word).to_owned()).collect()
 }
+
+impl Runner for &FakeRunner {
+    fn run(&self, argv: &[String]) -> Result<String> {
+        (**self).run(argv)
+    }
+}

@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), expect(dead_code, reason = "used by the TUI and the watch service once they are wired"))]
-
 mod values;
 
 use std::io::ErrorKind;
@@ -30,7 +28,7 @@ pub(crate) enum Sort {
     Cpu,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct Loaded {
     pub(crate) config: Config,
     pub(crate) warnings: Vec<String>,

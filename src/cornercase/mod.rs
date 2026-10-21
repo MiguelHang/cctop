@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), expect(dead_code, reason = "the TUI, the action and the alerts call the client in later tasks"))]
-
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::Command;
@@ -45,6 +43,7 @@ impl Runner for CommandRunner {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(test), expect(dead_code, reason = "the TUI focuses workspaces and projects from task 010"))]
 pub(crate) enum Target {
     Pane(u64),
     Tab(u64),
