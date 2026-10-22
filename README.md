@@ -21,7 +21,7 @@ cornercase shows what the plugin runs and asks before installing. When the insta
 
 ## Use
 
-Pick **cctop** from cornercase's menu, in any project, workspace, tab or pane. It focuses a project named `cctop` with a tab running cctop, creating them when they are missing, so there is always one cctop and always in the same place.
+Pick **cctop** from cornercase's menu, in any project, workspace, tab or pane. It opens cctop in a split to the right of that pane (or of the active pane of that tab, workspace or project) and focuses it; when that tab already shows cctop, it focuses that one instead. Quitting cctop (`q`) closes its pane.
 
 You can also run `cctop` in any terminal while cornercase runs; it asks the server through `$CORNERCASE_BIN`, or `cornercase` on the `PATH`.
 

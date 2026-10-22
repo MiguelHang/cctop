@@ -4,7 +4,7 @@ version = "0.1.0"
 api = 1
 description = "A btop for cornercase: memory and CPU per project, workspace, tab and pane, and what fills Claude's context"
 platforms = ["linux", "macos"]
-permissions = ["read", "notify", "open"]
+permissions = ["read", "notify", "split", "focus"]
 
 [[build]]
 command = ["cargo", "build", "--release", "--locked"]

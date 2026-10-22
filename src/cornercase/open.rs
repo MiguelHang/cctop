@@ -1,53 +1,83 @@
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::snapshot::{Project, Tab};
+use super::snapshot::{Pane, Project, Tab, Workspace};
 use super::{Client, Runner, Snapshot, Target};
 use crate::error::{Error, Result};
 
 const CCTOP: &str = "cctop";
 
-pub(crate) fn state_folder(var: Option<OsString>) -> Result<PathBuf> {
-    let folder = var.filter(|var| !var.is_empty()).map(PathBuf::from).ok_or(Error::NotInCornercase)?;
-    std::fs::create_dir_all(&folder)?;
-    Ok(folder.canonicalize()?)
+type Place = fn(u64) -> Target;
+
+const CLICKED: [(&str, Place); 4] = [
+    ("CORNERCASE_PANE", Target::Pane),
+    ("CORNERCASE_TAB", Target::Tab),
+    ("CORNERCASE_WORKSPACE", Target::Workspace),
+    ("CORNERCASE_PROJECT", Target::Project),
+];
+
+pub(crate) fn clicked(env: impl Fn(&str) -> Option<OsString>) -> Result<Target> {
+    CLICKED
+        .into_iter()
+        .find_map(|(key, target)| env(key).and_then(|id| id.to_str()?.trim().parse().ok()).map(target))
+        .ok_or(Error::NotInCornercase)
 }
 
-pub(crate) fn open_cctop<R: Runner>(client: &Client<R>, state: &Path, exe: &Path) -> Result<()> {
-    let id = client.open(state, true)?;
+pub(crate) fn open_cctop<R: Runner>(client: &Client<R>, clicked: Target, exe: &Path) -> Result<()> {
     let snapshot = client.status()?;
-    let project = find_project(&snapshot, id, state);
-    if let Some(tab) = project.and_then(cctop_tab) {
-        return client.focus(Target::Tab(tab.id));
+    let tab = clicked_tab(&snapshot, clicked).ok_or_else(|| Error::NoPane(describe(clicked)))?;
+    if let Some(pane) = tab.panes.iter().find(|pane| runs_cctop(pane)) {
+        return client.focus(Target::Pane(pane.id));
     }
-    let workspace =
-        project.and_then(|project| project.workspaces.first()).ok_or_else(|| Error::NoWorkspace(state.to_owned()))?;
-    let pane = client.new_tab(workspace.id, CCTOP, &[exe.to_string_lossy().into_owned()])?;
-    client.focus(Target::Pane(pane))
+    let pane = match clicked {
+        Target::Pane(id) => id,
+        _ => active_or_first(&tab.panes, |pane| pane.active).ok_or_else(|| Error::NoPane(describe(clicked)))?.id,
+    };
+    client.split_focused(pane, &["exec".to_owned(), shell_quote(&exe.to_string_lossy())]).map(drop)
 }
 
-fn find_project<'a>(snapshot: &'a Snapshot, id: u64, state: &Path) -> Option<&'a Project> {
-    let by_id = snapshot.projects.iter().find(|project| project.id == id);
-    by_id.or_else(|| {
-        snapshot.projects.iter().find(|project| project.path.as_deref().is_some_and(|path| same_path(path, state)))
-    })
-}
-
-fn same_path(a: &Path, b: &Path) -> bool {
-    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_owned());
-    canonical(a) == canonical(b)
-}
-
-fn cctop_tab(project: &Project) -> Option<&Tab> {
-    project.workspaces.iter().flat_map(|workspace| &workspace.tabs).find(|tab| runs_cctop(tab))
-}
-
-fn runs_cctop(tab: &Tab) -> bool {
-    let programs: Vec<&str> = tab.panes.iter().filter_map(|pane| pane.command.as_deref()).collect();
-    if programs.is_empty() {
-        return tab.name.as_deref() == Some(CCTOP);
+fn clicked_tab(snapshot: &Snapshot, clicked: Target) -> Option<&Tab> {
+    let workspaces = || snapshot.projects.iter().flat_map(|project| &project.workspaces);
+    let tabs = || workspaces().flat_map(|workspace| &workspace.tabs);
+    match clicked {
+        Target::Pane(id) => tabs().find(|tab| tab.panes.iter().any(|pane| pane.id == id)),
+        Target::Tab(id) => tabs().find(|tab| tab.id == id),
+        Target::Workspace(id) => workspaces().find(|workspace| workspace.id == id).and_then(shown_tab),
+        Target::Project(id) => snapshot.projects.iter().find(|project| project.id == id).and_then(shown_workspace),
     }
-    programs.into_iter().any(|program| Path::new(program).file_name().is_some_and(|name| name == CCTOP))
+}
+
+fn shown_workspace(project: &Project) -> Option<&Tab> {
+    active_or_first(&project.workspaces, |workspace| workspace.active).and_then(shown_tab)
+}
+
+fn shown_tab(workspace: &Workspace) -> Option<&Tab> {
+    active_or_first(&workspace.tabs, |tab| tab.active)
+}
+
+fn active_or_first<T>(items: &[T], active: impl Fn(&T) -> bool) -> Option<&T> {
+    items.iter().find(|item| active(item)).or_else(|| items.first())
+}
+
+fn runs_cctop(pane: &Pane) -> bool {
+    pane.command.as_deref().is_some_and(|program| Path::new(program).file_name().is_some_and(|name| name == CCTOP))
+}
+
+fn describe(target: Target) -> String {
+    match target {
+        Target::Pane(id) => format!("pane {id}"),
+        Target::Tab(id) => format!("tab {id}"),
+        Target::Workspace(id) => format!("workspace {id}"),
+        Target::Project(id) => format!("project {id}"),
+    }
+}
+
+fn shell_quote(word: &str) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "/._+-=:,@%".contains(c);
+    if !word.is_empty() && word.chars().all(plain) {
+        return word.to_owned();
+    }
+    format!("'{}'", word.replace('\'', r"'\''"))
 }
 
 #[cfg(test)]

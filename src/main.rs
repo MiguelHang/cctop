@@ -15,7 +15,9 @@ struct Cli {
 enum Command {
     #[command(about = "Watch every pane and notify through cornercase when one crosses a threshold")]
     Watch,
-    #[command(about = "Focus the cctop project in cornercase, opening it and its tab when missing")]
+    #[command(
+        about = "Open cctop in a split beside the clicked pane in cornercase, or focus the one already in that tab"
+    )]
     Open,
 }
 

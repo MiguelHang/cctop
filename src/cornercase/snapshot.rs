@@ -17,6 +17,8 @@ pub(crate) struct Project {
     pub(crate) path: Option<PathBuf>,
     group: Option<u64>,
     #[serde(default)]
+    pub(crate) active: bool,
+    #[serde(default)]
     pub(crate) workspaces: Vec<Workspace>,
 }
 
@@ -29,6 +31,8 @@ pub(crate) struct Workspace {
     #[serde(default)]
     pub(crate) worktree: bool,
     #[serde(default)]
+    pub(crate) active: bool,
+    #[serde(default)]
     pub(crate) tabs: Vec<Tab>,
 }
 
@@ -36,6 +40,8 @@ pub(crate) struct Workspace {
 pub(crate) struct Tab {
     pub(crate) id: u64,
     pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) active: bool,
     #[serde(default)]
     pub(crate) panes: Vec<Pane>,
 }
@@ -53,6 +59,8 @@ pub(crate) struct Pane {
     #[serde(rename = "program")]
     pub(crate) command: Option<String>,
     pub(crate) path: Option<PathBuf>,
+    #[serde(default)]
+    pub(crate) active: bool,
 }
 
 #[derive(Deserialize)]

@@ -1,5 +1,4 @@
 use std::ffi::OsString;
-use std::path::Path;
 use std::process::Command;
 
 use crate::error::{Error, Result};
@@ -43,10 +42,6 @@ impl Runner for CommandRunner {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "no caller focuses a workspace or project yet; the client covers every focus flag")
-)]
 pub(crate) enum Target {
     Pane(u64),
     Tab(u64),
@@ -79,16 +74,8 @@ impl<R: Runner> Client<R> {
         Snapshot::parse(&self.runner.run(&argv(["status", "--json"]))?)
     }
 
-    pub(crate) fn open(&self, path: &Path, focus: bool) -> Result<u64> {
-        let mut argv = argv(["open", &path.to_string_lossy()]);
-        if focus {
-            argv.push("--focus".to_owned());
-        }
-        self.id(&argv)
-    }
-
-    pub(crate) fn new_tab(&self, workspace: u64, name: &str, command: &[String]) -> Result<u64> {
-        let mut argv = argv(["new-tab", "--workspace", &workspace.to_string(), "--name", name, "--"]);
+    pub(crate) fn split_focused(&self, pane: u64, command: &[String]) -> Result<u64> {
+        let mut argv = argv(["split", "--pane", &pane.to_string(), "--focus", "--"]);
         argv.extend_from_slice(command);
         self.id(&argv)
     }
