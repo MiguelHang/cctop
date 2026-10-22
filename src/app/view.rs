@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use super::history::History;
 use super::state::{RowId, State, column};
 use crate::ui::{ContextView, Header, Row, RowKind, View};
 use crate::usage::{PaneNode, ProcessNode, ProjectNode, TabNode, Totals, Tree, WorkspaceNode};
@@ -16,17 +17,29 @@ pub(super) fn lines(tree: &Tree, folded: &HashSet<RowId>) -> Vec<Line> {
     flat.lines
 }
 
-pub(super) fn view(state: &State, lines: &[Line], header: Header, context: ContextView) -> View {
+pub(super) fn view(state: &State, lines: &[Line], history: &History, header: Header, context: ContextView) -> View {
     View {
         tab: state.tab,
-        rows: lines.iter().map(|line| line.row.clone()).collect(),
+        rows: rows(state, lines, history),
         scroll: state.scroll,
         selected: state.index(lines),
         sort: column(state.sort),
         header,
         context,
-        dialog: None,
+        ..View::default()
     }
+}
+
+fn rows(state: &State, lines: &[Line], history: &History) -> Vec<Row> {
+    let visible = state.scroll..state.scroll.saturating_add(state.page.max(1));
+    lines
+        .iter()
+        .enumerate()
+        .map(|(at, line)| {
+            let cpu_history = if visible.contains(&at) { history.row(line.id) } else { Vec::new() };
+            Row { cpu_history, ..line.row.clone() }
+        })
+        .collect()
 }
 
 struct Flat<'a> {
@@ -94,19 +107,23 @@ fn node(depth: u16, kind: RowKind, label: String, totals: Totals) -> Row {
     }
 }
 
-fn project_label(project: &ProjectNode) -> String {
+pub(super) fn project_label(project: &ProjectNode) -> String {
     let folder =
         project.path.as_ref().and_then(|path| path.file_name()).map(|name| name.to_string_lossy().into_owned());
     project.name.clone().or(folder).unwrap_or_else(|| format!("project {}", project.id))
 }
 
 fn workspace_label(workspace: &WorkspaceNode) -> String {
-    let name = workspace.name.clone().or_else(|| workspace.branch.clone());
-    let name = name.unwrap_or_else(|| format!("workspace {}", workspace.id));
+    let name = workspace_name(workspace);
     if workspace.worktree { format!("{name} (worktree)") } else { name }
 }
 
-pub(super) fn pane_label(pane: &PaneNode) -> String {
+pub(super) fn workspace_name(workspace: &WorkspaceNode) -> String {
+    let name = workspace.name.clone().or_else(|| workspace.branch.clone());
+    name.unwrap_or_else(|| format!("workspace {}", workspace.id))
+}
+
+fn pane_label(pane: &PaneNode) -> String {
     match pane.command.as_ref().or(pane.agent.as_ref()) {
         Some(program) => format!("%{} {program}", pane.id),
         None => format!("%{}", pane.id),

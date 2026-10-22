@@ -14,3 +14,8 @@ The first release: a `btop` for cornercase, as a plugin for Linux and macOS (x86
 - **Mouse first**: click to select, fold and unfold, sort and switch views; the wheel scrolls. Arrows, `PgUp`/`PgDn`, `Enter`, `Tab`, `s`, `k` and `q` work too.
 - **`config.toml`** for the refresh interval, the starting sort and the alert thresholds. A bad value keeps its default and shows a warning; cctop always starts.
 - When cornercase stops answering, cctop keeps the last tree on screen, says how long it has been waiting and stays responsive.
+- **A btop look**: rounded boxes with their titles and keys on the borders; graphs of the last hour for the CPU (as a share of the machine) and memory (against the machine's) of everything cornercase runs, hidden on small terminals before the table loses a line; per row, a memory bar coloured against the memory threshold and a sparkline of the last minute of CPU. The history lives in memory only.
+- **Context has its own list of agents**: every Claude session of the server, fullest first, with its bar and %; click one or use `↑`/`↓` to see its breakdown, now with a bar of the whole window (fixed, dynamic and free) and fixed and dynamic parts side by side. Entering Context shows the Claude under what is selected in Processes, or the fullest one; a double click on a pane with Claude opens it directly.
+- Commands in the breakdown show without the `cd <folder>; ` or `cd <folder> && ` Claude puts in front of them.
+- `Esc` quits, like `q`, unless the kill dialog is open, where it cancels.
+- Processes that rewrite their arguments shorter (`npm exec …`) no longer show trailing blanks, and moving the mouse over cctop without a button no longer redraws it.

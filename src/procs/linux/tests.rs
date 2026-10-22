@@ -3,7 +3,10 @@ use std::time::Duration;
 
 use rstest::rstest;
 
-use super::{LinuxSource, Stat, current_uid, parse_cmdline, parse_stat, parse_statm, parse_status, swapped};
+use super::{
+    LinuxSource, Stat, current_uid, machine_memory, mem_total, parse_cmdline, parse_stat, parse_statm, parse_status,
+    swapped,
+};
 use crate::procs::ProcessSource;
 use crate::procs::probe::own_process;
 use crate::test_util::{TempDir, fixture};
@@ -65,6 +68,15 @@ mod meminfo {
     fn tells_whether_anything_is_swapped_out(#[case] text: &str, #[case] expected: bool) {
         assert_eq!(swapped(text), expected);
     }
+
+    #[rstest]
+    #[case::in_kibibytes("MemTotal:       32768 kB\nMemFree: 1 kB\n", Some(32 * 1024 * 1024))]
+    #[case::missing("MemFree:\t1024 kB\n", None)]
+    #[case::zero("MemTotal:\t0 kB\n", None)]
+    #[case::not_a_number("MemTotal:\tx kB\n", None)]
+    fn reads_the_machine_memory(#[case] text: &str, #[case] expected: Option<u64>) {
+        assert_eq!(mem_total(text), expected);
+    }
 }
 
 mod stat {
@@ -98,6 +110,8 @@ mod cmdline {
     #[case::empty(b"", &[])]
     #[case::without_the_last_nul(b"sleep\x0030", &["sleep", "30"])]
     #[case::invalid_utf8(b"a\xff\x00", &["a\u{fffd}"])]
+    #[case::padded_with_nul_after_rewriting_its_arguments(b"npm exec esbuild\x00\x00\x00\x00", &["npm exec esbuild"])]
+    #[case::only_nul(b"\x00\x00", &[])]
     fn splits_on_nul(#[case] bytes: &[u8], #[case] expected: &[&str]) {
         assert_eq!(parse_cmdline(bytes), expected);
     }
@@ -275,6 +289,11 @@ mod real_proc {
     #[test]
     fn shows_cpu_after_spinning() {
         probe::shows_cpu_after_spinning(&LinuxSource::new());
+    }
+
+    #[test]
+    fn the_machine_holds_more_memory_than_the_test_process() {
+        probe::the_machine_holds_the_test_process(&LinuxSource::new(), machine_memory());
     }
 
     #[test]

@@ -2,8 +2,8 @@
 
 A `btop` for [cornercase](https://usecornercase.dev), shipped as a cornercase plugin.
 
-- **Processes**: one view of every project, workspace (and its worktree), tab and pane of the cornercase server, with the process tree under each pane and the memory and CPU it uses, totalled at every level. Panes show their agent, status and context %, and the costliest path of each pane is highlighted down to the process that weighs most. Sort by memory or CPU, fold what you do not need, and kill a runaway process or its group (it always asks first).
-- **Context**: for the Claude session in the selected pane, what fills its context: the fixed part (`CLAUDE.md` and its imports, skills, tools, the system prompt) and the files and commands read since the last compaction, against the real total Claude reports and the % cornercase shows. Estimated numbers are marked `≈`.
+- **Processes**: one view of every project, workspace (and its worktree), tab and pane of the cornercase server, with the process tree under each pane and the memory and CPU it uses, totalled at every level, under graphs of the last hour and with a memory bar and a minute of CPU per row. Panes show their agent, status and context %, and the costliest path of each pane is highlighted down to the process that weighs most. Sort by memory or CPU, fold what you do not need, and kill a runaway process or its group (it always asks first).
+- **Context**: every Claude session of the server, fullest first, and for the one you pick, what fills its context: the fixed part (`CLAUDE.md` and its imports, skills, tools, the system prompt) and the files and commands read since the last compaction, against the real total Claude reports and the % cornercase shows. Estimated numbers are marked `≈`.
 - **Alerts**: a background service that warns with a cornercase notification when a pane's processes cross a memory threshold, or stay over a CPU threshold for a while.
 
 It runs on Linux and macOS and uses only cornercase's public commands.

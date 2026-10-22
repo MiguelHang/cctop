@@ -34,7 +34,7 @@ python3 -c "b = bytearray(5 * 2**30); b[::4096] = b'x' * (len(b) // 4096); impor
 
 - En cctop (Processes, orden por memoria), el proceso `python3` aparece en menos de 5 s bajo su pane, su pestaña y el workspace correcto (marcado `(worktree)` si lo es), con unos 5 GB, y la ruta caliente (amarillo) llega hasta él. Los totales del pane, la pestaña, el workspace y el proyecto lo incluyen.
 - El servicio avisa una sola vez (toast y notificación del escritorio): `cctop: <workspace> › <pane> 5.x GB — python3 -c … 5.x GB`. No repite mientras siga por encima.
-- `k` (o clic derecho) sobre el proceso: el diálogo nombra el proceso, su pid, su grupo y su pane; `Esc` no hace nada; `Process` lo termina y desaparece en el siguiente refresco.
+- `k` (o clic derecho) sobre el proceso: el diálogo nombra el proceso, su pid, su grupo y su pane; `Esc` lo cierra sin matar nada; `Process` lo termina y desaparece en el siguiente refresco.
 - Repetir con el umbral de CPU si se quiere: `cpu_threshold = 50` y `cpu_sustain = "10s"` en `$CORNERCASE_PLUGIN_CONFIG/config.toml` (la carpeta de configuración que cornercase da al plugin; ver design/config.md), reiniciar el servicio (`cornercase plugin disable cctop && cornercase plugin enable cctop`) y lanzar `yes > /dev/null` en un pane.
 - Evidencia: captura de cctop con el árbol desplegado y del aviso.
 
@@ -42,8 +42,11 @@ python3 -c "b = bytearray(5 * 2**30); b[::4096] = b'x' * (len(b) // 4096); impor
 
 En un pane con una sesión de Claude en este repositorio (o en el de cornercase), tras al menos una respuesta:
 
-- Seleccionar el pane en Processes y pulsar `Tab`: la vista Context muestra `AGENTS.md` y `DESIGN.md` (y `CLAUDE.md`, `MEMORY.md`…) en `Fixed` con su peso `≈`, y en `Dynamic` los ficheros y comandos leídos desde la última compactación.
-- `Total N tokens` y su % frente al % de cornercase que aparece al lado y en la barra de cornercase: deben quedar a ±2 puntos. Unos puntos de diferencia son normales (cornercase redondea y refresca a su ritmo); repetir la lectura tras una respuesta nueva.
+- Seleccionar el pane en Processes y pulsar `Tab` (o la pestaña `Context`): a la izquierda, la lista de agentes con todos los Claude del servidor, el más lleno primero, y marcado (`▶`) el del pane seleccionado; sin selección, o si la selección no tiene Claude, el más lleno. A la derecha, su desglose: `fixed` con `AGENTS.md` y `DESIGN.md` (y `CLAUDE.md`, `MEMORY.md`…) con su peso `≈`, y `dynamic` con los ficheros y comandos leídos desde la última compactación (sin el `cd <carpeta> && ` delante).
+- El título del desglose termina en `N · P%` (el total real, sin `≈`, y su parte de la ventana); la leyenda bajo la barra termina en `cornercase N%`. Los dos % y el de la barra de cornercase deben quedar a ±2 puntos. Unos puntos de diferencia son normales (cornercase redondea y refresca a su ritmo); repetir la lectura tras una respuesta nueva.
+- Clic en otro agente de la lista (o `↑`/`↓`): el desglose pasa a ese agente al momento. Volver a Processes y hacer doble clic en un pane con Claude: abre Context con ese agente; un doble clic en un pane sin Claude solo lo selecciona.
+- Con un terminal alto y ancho, en Processes se ven las gráficas `cpu` y `mem` de la última hora, la barra de memoria y el sparkline `CPU 60s` por fila; al encoger el pane las gráficas desaparecen antes de que la tabla pierda líneas.
+- `Esc` sale de cctop (como `q`); con el diálogo de matar abierto, solo lo cierra.
 - Hacer `/compact` en la sesión: tras la siguiente respuesta, la parte dinámica se vacía y vuelve a crecer.
 - Si la versión de Claude Code (`claude --version`) ya no es 2.1.306, capturar un transcript nuevo como fixture **sintética** (rutas y datos personales reemplazados) en `tests/fixtures/claude/<versión>/`.
 - Evidencia: captura de la vista Context y del % de cornercase en el mismo momento.
@@ -69,6 +72,7 @@ echo "scale=2; ($t1 - $t0) * 100 / 60 / $(getconf CLK_TCK)" | bc    # % de un n�
 
 - Los campos 16 y 17 suman los hijos ya esperados (los `cornercase status`); el trabajo del servidor de cornercase al responder no entra, medirlo aparte si importa (`pidstat -p <pid del servidor> 60 1`).
 - Repetir con la vista Context sobre un pane con Claude, y para `cctop watch` (cada 5 s por defecto).
+- Tras 018 (gráficas, barras y lista de agentes), medido en 120×40 frente a la build anterior: igual dentro del ruido en Processes; detalle en [design/tui.md](../design/tui.md) (coste en reposo).
 - Si con unos 30 panes pasa del 1 %, perfilar (`perf record -g -p $pid`) y anotar la medida en `design/tui.md` antes de abrir otra tarea. `cctop watch` sigue pidiendo `status` cada 5 s (unos 0,9 % en la máquina medida).
 
 ## 5. Publicar: repositorio, CI y release

@@ -146,13 +146,37 @@ fn tool_use(block: &Value) -> Option<ToolUse> {
     let field = |key: &str| input[key].as_str().map(str::to_owned);
     let tool = match block["name"].as_str()? {
         "Read" | "Edit" | "Write" => field("file_path").map(Tool::File),
-        "Bash" => field("command").map(Tool::Command),
+        "Bash" => field("command").map(|command| Tool::Command(without_cd(&command).to_owned())),
         "Grep" | "Glob" => field("pattern").map(Tool::Search),
         "Agent" | "Task" => Some(Tool::Subagent),
         _ => None,
     };
     let chars = if input.is_null() { 0 } else { char_count(&input.to_string()) };
     Some(ToolUse { id: block["id"].as_str()?.to_owned(), tool: tool.unwrap_or(Tool::Other), chars })
+}
+
+fn without_cd(command: &str) -> &str {
+    let mut rest = command;
+    while let Some(next) = after_cd(rest.trim_start()) {
+        rest = next;
+    }
+    if rest.len() == command.len() { command } else { rest.trim_start() }
+}
+
+fn after_cd(command: &str) -> Option<&str> {
+    let path = command.strip_prefix("cd ")?.trim_start();
+    let tail = after_word(path)?.trim_start();
+    let rest = tail.strip_prefix("&&").or_else(|| tail.strip_prefix(';'))?;
+    (!rest.trim().is_empty()).then_some(rest)
+}
+
+fn after_word(text: &str) -> Option<&str> {
+    match text.chars().next()? {
+        quote @ ('"' | '\'') => text[1..].find(quote).map(|end| &text[end + 2..]),
+        _ => text
+            .find(|character: char| character.is_whitespace() || matches!(character, ';' | '&'))
+            .map(|end| &text[end..]),
+    }
 }
 
 fn usage(value: &Value) -> Option<u64> {

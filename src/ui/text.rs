@@ -4,6 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 
 const ELLIPSIS: char = '…';
+const PLACE: &str = " › ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Align {
@@ -36,6 +37,15 @@ pub(super) fn fit_start(text: &str, max: u16) -> String {
     shown
 }
 
+pub(super) fn fit_place(text: &str, max: u16) -> String {
+    let parts: Vec<&str> = text.split(PLACE).collect();
+    let last_two = parts.len().saturating_sub(2);
+    (0..last_two)
+        .map(|skip| parts[skip..].join(PLACE))
+        .find(|shown| width(shown) <= max)
+        .unwrap_or_else(|| fit_start(&parts[last_two..].join(PLACE), max))
+}
+
 fn keep(characters: impl Iterator<Item = char>, max: u16) -> Vec<char> {
     let mut kept = Vec::new();
     let mut used = 0;
@@ -61,3 +71,6 @@ pub(super) fn put(buffer: &mut Buffer, area: Rect, text: &str, align: Align, sty
     };
     buffer.set_stringn(x, area.y, shown, usize::from(area.width), style);
 }
+
+#[cfg(test)]
+mod tests;

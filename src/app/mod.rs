@@ -1,4 +1,6 @@
+mod agents;
 mod context;
+mod history;
 mod input;
 mod kill;
 mod sampler;
@@ -11,27 +13,30 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use ratatui::backend::Backend;
-use ratatui::crossterm::event::Event;
+use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::{Frame, Terminal};
 
-use input::Flow;
+use agents::Agent;
+use history::History;
+use input::{Flow, Lists};
 use kill::Prompt;
 use sampler::{Reading, Sampler, Tick, Update};
 use state::State;
 use terminal::{Crossterm, Events, Screen};
 use view::Line;
 
-use crate::config::{self, Loaded};
+use crate::config::{self, Config, Loaded};
 use crate::context::Sessions;
 use crate::cornercase::{Client, CommandRunner};
 use crate::error::Result;
 use crate::procs::{self, Killer};
-use crate::ui::{self, ContextView, Header, Hits, View};
+use crate::ui::{self, AgentRow, ContextDetail, ContextView, Graphs, Header, Hit, Hits, View, ViewTab};
 use crate::usage::{self, Tree};
 
 const POLL: Duration = Duration::from_millis(250);
 const STALE_TICKS: u32 = 3;
 const STALE_MIN: Duration = Duration::from_secs(5);
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 pub(crate) fn run_tui() -> Result<()> {
     let Loaded { config, warnings } = config::load_system();
@@ -42,6 +47,8 @@ pub(crate) fn run_tui() -> Result<()> {
     let mut app = App::new(sort, config.interval, Instant::now(), Box::new(procs::Signal));
     app.notice = warnings.into_iter().next();
     app.panes = Some(running.panes);
+    app.memory_threshold = config.memory_threshold;
+    app.machine = Machine { cpus: procs::cpus(), memory: procs::machine_memory() };
     let mut screen = Screen::enter()?;
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
 }
@@ -67,13 +74,22 @@ where
             terminal.draw(|frame| app.draw(frame)).map_err(io::Error::other)?;
         }
         changed = false;
-        if let Some(event) = events.next(POLL)? {
-            if app.handle(&event) == Flow::Quit {
-                return Ok(());
-            }
-            changed = true;
+        let Some(event) = events.next(POLL)?.filter(|event| !moved(event)) else { continue };
+        if app.handle(&event, Instant::now()) == Flow::Quit {
+            return Ok(());
         }
+        changed = true;
     }
+}
+
+fn moved(event: &Event) -> bool {
+    matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Machine {
+    cpus: usize,
+    memory: Option<u64>,
 }
 
 pub(crate) struct App {
@@ -81,6 +97,12 @@ pub(crate) struct App {
     reading: Option<Reading>,
     tree: Tree,
     lines: Vec<Line>,
+    agents: Vec<Agent>,
+    agent_panes: Vec<u64>,
+    history: History,
+    machine: Machine,
+    memory_threshold: u64,
+    clicked: Option<(usize, Instant)>,
     hits: Hits,
     error: Option<String>,
     notice: Option<String>,
@@ -100,6 +122,12 @@ impl App {
             reading: None,
             tree: Tree::default(),
             lines: Vec::new(),
+            agents: Vec::new(),
+            agent_panes: Vec::new(),
+            history: History::new(interval),
+            machine: Machine { cpus: 1, memory: None },
+            memory_threshold: Config::default().memory_threshold,
+            clicked: None,
             hits: Hits::default(),
             error: None,
             notice: None,
@@ -131,6 +159,7 @@ impl App {
                 self.reading = Some(reading);
                 self.error = None;
                 self.rebuild();
+                self.history.record(&self.tree);
             }
             Err(error) => self.error = Some(error),
         }
@@ -148,14 +177,22 @@ impl App {
         changed
     }
 
-    fn handle(&mut self, event: &Event) -> Flow {
+    fn handle(&mut self, event: &Event, now: Instant) -> Flow {
         if self.prompt.is_some() {
             return self.answer(event);
         }
-        let sort = self.state.sort;
-        let flow = input::handle(&mut self.state, &self.lines, &self.hits, event);
+        let (sort, tab) = (self.state.sort, self.state.tab);
+        let double = tab == ViewTab::Processes && self.double_click(event, now);
+        let lists = Lists { lines: &self.lines, agents: &self.agent_panes };
+        let flow = input::handle(&mut self.state, &lists, &self.hits, event);
         if matches!(event, Event::Key(_) | Event::Mouse(_)) {
             self.notice = None;
+        }
+        if double {
+            self.state.tab = ViewTab::Context;
+        }
+        if tab == ViewTab::Processes && self.state.tab == ViewTab::Context {
+            self.state.agent = agents::candidate(&self.agents, self.state.selected);
         }
         if self.state.sort == sort {
             self.relayout();
@@ -170,8 +207,30 @@ impl App {
         flow
     }
 
+    fn double_click(&mut self, event: &Event, now: Instant) -> bool {
+        let Event::Mouse(mouse) = event else { return false };
+        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
+            return false;
+        }
+        let Some(Hit::Row(index)) = self.hits.at(mouse.column, mouse.row) else {
+            self.clicked = None;
+            return false;
+        };
+        let again =
+            self.clicked.is_some_and(|(at, when)| at == index && now.saturating_duration_since(when) <= DOUBLE_CLICK);
+        self.clicked = if again { None } else { Some((index, now)) };
+        again && self.lines.get(index).is_some_and(|line| agents::under(&self.agents, line.id).is_some())
+    }
+
+    fn context_pane(&self) -> Option<u64> {
+        match self.state.tab {
+            ViewTab::Context => self.state.agent,
+            ViewTab::Processes => self.state.selected.and_then(|id| agents::under(&self.agents, id)),
+        }
+    }
+
     fn ask_context(&mut self) {
-        let pane = self.state.pane();
+        let pane = self.context_pane();
         if pane == self.asked {
             return;
         }
@@ -183,9 +242,17 @@ impl App {
     }
 
     fn context_view(&self) -> ContextView {
-        let pane = self.state.pane().and_then(|id| context::pane_node(&self.tree, id));
+        let pane = self.context_pane();
+        let marked = self.agents.iter().position(|agent| Some(agent.pane) == pane);
+        let agent = marked.and_then(|at| self.agents.get(at));
+        let node = agent.and_then(|agent| Some((context::pane_node(&self.tree, agent.pane)?, agent.label.as_str())));
         let found = self.reading.as_ref().and_then(|reading| reading.context.as_ref());
-        context::view(pane, found, self.state.context_scroll)
+        let agents = self
+            .agents
+            .iter()
+            .map(|agent| AgentRow { label: agent.label.clone(), percent: agent.percent.map(f64::from) })
+            .collect();
+        ContextView { agents, marked, detail: context::view(node, found, self.state.context_scroll) }
     }
 
     fn rebuild(&mut self) {
@@ -194,6 +261,12 @@ impl App {
             .as_ref()
             .map(|reading| usage::build(&reading.snapshot, &reading.sample, &reading.cpu, self.state.sort))
             .unwrap_or_default();
+        self.agents = agents::agents(&self.tree);
+        self.agent_panes = self.agents.iter().map(|agent| agent.pane).collect();
+        let listed = self.agents.iter().any(|agent| Some(agent.pane) == self.state.agent);
+        if self.state.tab == ViewTab::Context && !listed {
+            self.state.agent = self.agents.first().map(|agent| agent.pane);
+        }
         self.relayout();
     }
 
@@ -211,20 +284,34 @@ impl App {
         let error = self.error.clone().or_else(|| self.notice.clone());
         let header = Header { memory: self.tree.totals.memory, cpu: self.tree.totals.cpu, error };
         let dialog = self.prompt.as_ref().map(|prompt| prompt.dialog.clone());
-        View { dialog, ..view::view(&self.state, &self.lines, header, context) }
+        let cpus = f64::from(u32::try_from(self.machine.cpus.max(1)).unwrap_or(u32::MAX));
+        let graphs = Graphs {
+            cpu: self.history.cpu_share(cpus),
+            memory: self.history.memory(),
+            points: self.history.total_points(),
+            machine_memory: self.machine.memory,
+            row_points: self.history.row_points(),
+        };
+        let memory_threshold = self.memory_threshold;
+        View {
+            dialog,
+            graphs,
+            memory_threshold,
+            ..view::view(&self.state, &self.lines, &self.history, header, context)
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>) {
-        self.state.page = usize::from(frame.area().height.saturating_sub(2)).max(1);
+        self.state.page = ui::list_height(frame.area()).max(1);
         self.state.reconcile(&self.lines);
         self.ask_context();
-        let mut context = self.context_view();
-        let most = ui::context_scroll_max(&context, frame.area().height);
+        let mut view = self.view_with(self.context_view());
+        let most = ui::context_scroll_max(&view, frame.area());
         self.state.context_scroll = self.state.context_scroll.min(most);
-        if let ContextView::Session(session) = &mut context {
+        if let ContextDetail::Session(session) = &mut view.context.detail {
             session.scroll = self.state.context_scroll;
         }
-        self.hits = ui::render(frame, &self.view_with(context));
+        self.hits = ui::render(frame, &view);
     }
 }
 

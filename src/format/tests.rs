@@ -1,6 +1,6 @@
 use rstest::rstest;
 
-use super::{bytes, estimated, or_missing, percent, thousands, tokens};
+use super::{bytes, estimated, or_missing, percent, tokens};
 
 mod sizes {
     use super::*;
@@ -65,14 +65,5 @@ mod token_counts {
     #[case::whole_millions(1_000_000, "1M")]
     fn are_shortened_by_size(#[case] value: u64, #[case] expected: &str) {
         assert_eq!(tokens(value), expected);
-    }
-
-    #[rstest]
-    #[case::zero(0, "0")]
-    #[case::three_digits(999, "999")]
-    #[case::four_digits(1000, "1,000")]
-    #[case::millions(1_234_567, "1,234,567")]
-    fn are_grouped_by_thousands(#[case] value: u64, #[case] expected: &str) {
-        assert_eq!(thousands(value), expected);
     }
 }

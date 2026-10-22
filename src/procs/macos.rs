@@ -128,6 +128,15 @@ fn current_uid() -> u32 {
     unsafe { libc::getuid() }
 }
 
+pub(crate) fn machine_memory() -> Option<u64> {
+    let mut value: u64 = 0;
+    let mut length = size_of::<u64>();
+    let status = unsafe {
+        libc::sysctlbyname(c"hw.memsize".as_ptr(), (&raw mut value).cast(), &raw mut length, ptr::null_mut(), 0)
+    };
+    (status == 0 && value > 0).then_some(value)
+}
+
 fn arg_max() -> usize {
     let mut mib = [libc::CTL_KERN, libc::KERN_ARGMAX];
     let mut value: c_int = 0;

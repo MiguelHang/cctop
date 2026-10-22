@@ -22,6 +22,11 @@ pub(crate) fn lists_the_test_process(source: &impl ProcessSource) {
     assert!(process.memory.is_some());
 }
 
+pub(crate) fn the_machine_holds_the_test_process(source: &impl ProcessSource, machine: Option<u64>) {
+    let own = own_process(source, std::process::id()).and_then(|process| process.memory).expect("own memory");
+    assert!(machine.expect("the machine memory") > own);
+}
+
 struct Reaped(Child);
 
 impl Drop for Reaped {

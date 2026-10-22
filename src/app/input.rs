@@ -15,21 +15,28 @@ pub(crate) enum Flow {
     Kill,
 }
 
-pub(super) fn handle(state: &mut State, lines: &[Line], hits: &Hits, event: &Event) -> Flow {
+pub(crate) struct Lists<'a> {
+    pub(super) lines: &'a [Line],
+    pub(super) agents: &'a [u64],
+}
+
+pub(super) fn handle(state: &mut State, lists: &Lists<'_>, hits: &Hits, event: &Event) -> Flow {
     match event {
-        Event::Key(key) if key.kind != KeyEventKind::Release => key_press(state, lines, *key),
-        Event::Mouse(mouse) => self::mouse(state, lines, hits, *mouse),
+        Event::Key(key) if key.kind != KeyEventKind::Release => key_press(state, lists, *key),
+        Event::Mouse(mouse) => self::mouse(state, lists, hits, *mouse),
         _ => Flow::Continue,
     }
 }
 
-fn key_press(state: &mut State, lines: &[Line], key: KeyEvent) -> Flow {
+fn key_press(state: &mut State, lists: &Lists<'_>, key: KeyEvent) -> Flow {
     match key.code {
-        KeyCode::Char('q') => return Flow::Quit,
+        KeyCode::Char('q') | KeyCode::Esc => return Flow::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Flow::Quit,
         KeyCode::Tab | KeyCode::BackTab => state.next_tab(),
         KeyCode::Char('k') if state.tab == ViewTab::Processes => return Flow::Kill,
-        _ if state.tab == ViewTab::Processes => list_key(state, lines, key.code),
+        _ if state.tab == ViewTab::Processes => list_key(state, lists.lines, key.code),
+        KeyCode::Up => state.step_agent(lists.agents, -1),
+        KeyCode::Down => state.step_agent(lists.agents, 1),
         _ => {}
     }
     Flow::Continue
@@ -61,11 +68,12 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
     }
 }
 
-fn mouse(state: &mut State, lines: &[Line], hits: &Hits, mouse: MouseEvent) -> Flow {
+fn mouse(state: &mut State, lists: &Lists<'_>, hits: &Hits, mouse: MouseEvent) -> Flow {
     if state.tab != ViewTab::Processes {
-        context_mouse(state, hits, mouse);
+        context_mouse(state, lists.agents, hits, mouse);
         return Flow::Continue;
     }
+    let lines = lists.lines;
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => click(state, lines, hits.at(mouse.column, mouse.row)),
         MouseEventKind::Down(MouseButton::Right) => return right_click(state, lines, hits.at(mouse.column, mouse.row)),
@@ -82,9 +90,14 @@ fn right_click(state: &mut State, lines: &[Line], hit: Option<Hit>) -> Flow {
     Flow::Kill
 }
 
-fn context_mouse(state: &mut State, hits: &Hits, mouse: MouseEvent) {
+fn context_mouse(state: &mut State, agents: &[u64], hits: &Hits, mouse: MouseEvent) {
     match (mouse.kind, hits.at(mouse.column, mouse.row)) {
         (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) => state.tab = tab,
+        (MouseEventKind::Down(MouseButton::Left), Some(Hit::Agent(index))) => {
+            if let Some(&pane) = agents.get(index) {
+                state.agent = Some(pane);
+            }
+        }
         (MouseEventKind::ScrollDown, _) => state.context_scroll = state.context_scroll.saturating_add_signed(WHEEL),
         (MouseEventKind::ScrollUp, _) => state.context_scroll = state.context_scroll.saturating_add_signed(-WHEEL),
         _ => {}
@@ -101,7 +114,7 @@ fn click(state: &mut State, lines: &[Line], hit: Option<Hit>) {
                 state.toggle(line.id);
             }
         }
-        Some(Hit::Button(_)) | None => {}
+        Some(Hit::Button(_) | Hit::Agent(_)) | None => {}
     }
 }
 
