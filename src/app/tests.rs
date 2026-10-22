@@ -80,7 +80,15 @@ fn app_with(sample: Sample, sort: Option<usage::Sort>) -> App {
 pub(super) fn app_killing_with(sample: Sample, sort: Option<usage::Sort>, killer: FakeKiller) -> App {
     let mut app = App::new(sort, INTERVAL, Instant::now(), Box::new(killer));
     app.update(Update::Reading(Ok(reading(sample))), Instant::now());
+    unfold_all(&mut app);
     app
+}
+
+pub(super) fn unfold_all(app: &mut App) {
+    while let Some(line) = app.lines.iter().find(|line| line.row.folded == Some(true)) {
+        app.state.fold(line.id, false);
+        app.relayout();
+    }
 }
 
 fn labels(app: &App) -> Vec<String> {
@@ -112,11 +120,17 @@ pub(super) fn key(code: KeyCode) -> Event {
 mod ticking {
     use super::*;
 
+    fn ticked_once(sampler: &mut Sampler<FakeRunner, FakeSource>) -> App {
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(sampler.tick()), Instant::now());
+        unfold_all(&mut app);
+        app
+    }
+
     #[test]
     fn a_tick_with_fakes_gives_the_tree_in_cornercase_order() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
-        app.update(Update::Reading(sampler.tick()), Instant::now());
+        let app = ticked_once(&mut sampler);
         let expected = [
             "notes",
             "main",
@@ -144,8 +158,7 @@ mod ticking {
     #[test]
     fn the_second_tick_brings_cpu() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
-        app.update(Update::Reading(sampler.tick()), Instant::now());
+        let mut app = ticked_once(&mut sampler);
         assert_eq!(app.view().header.cpu, None);
         app.update(Update::Reading(sampler.tick()), Instant::now());
         let claude = index_of(&app, RowId::Process { pane: 1, pid: 101 });
@@ -155,9 +168,8 @@ mod ticking {
     #[test]
     fn each_reading_adds_to_the_history_as_a_share_of_the_machine() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        let mut app = ticked_once(&mut sampler);
         app.machine = super::super::Machine { cpus: 4, memory: Some(8_000 * MB) };
-        app.update(Update::Reading(sampler.tick()), Instant::now());
         app.update(Update::Reading(sampler.tick()), Instant::now());
         let graphs = app.view().graphs;
         assert_eq!(graphs.cpu, [25.0]);
@@ -171,8 +183,7 @@ mod ticking {
     #[test]
     fn only_the_rows_on_screen_carry_their_history() {
         let mut sampler = fake_sampler();
-        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
-        app.update(Update::Reading(sampler.tick()), Instant::now());
+        let mut app = ticked_once(&mut sampler);
         app.update(Update::Reading(sampler.tick()), Instant::now());
         let claude = index_of(&app, RowId::Process { pane: 1, pid: 101 });
         app.state.page = claude;
@@ -236,7 +247,7 @@ mod refreshing {
     fn selection_and_folds_survive_a_refresh_with_other_processes() {
         let now = Instant::now();
         let mut app = app_with(first_sample(now), None);
-        app.state.toggle(RowId::Pane(1));
+        app.state.fold(RowId::Pane(1), true);
         app.relayout();
         let cargo = index_of(&app, RowId::Pane(2));
         app.state.select(&app.lines, cargo);
@@ -256,6 +267,103 @@ mod refreshing {
         app.state.select(&app.lines, gone);
         app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
         assert_eq!(app.state.selected, Some(RowId::Process { pane: 2, pid: 202 }));
+    }
+}
+
+mod starting_folded {
+    use super::*;
+
+    fn folded_app(sample: Sample) -> App {
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(Ok(reading(sample))), Instant::now());
+        app
+    }
+
+    fn unfold(app: &mut App, ids: &[RowId]) {
+        for id in ids {
+            app.state.fold(*id, false);
+        }
+        app.relayout();
+    }
+
+    fn folded(app: &App, id: RowId) -> Option<bool> {
+        app.view().rows[index_of(app, id)].folded
+    }
+
+    const TO_CARGO: [RowId; 5] =
+        [RowId::Project(1), RowId::Workspace(1), RowId::Tab(1), RowId::Pane(2), RowId::Process { pane: 2, pid: 200 }];
+
+    #[test]
+    fn the_first_draw_shows_only_the_projects() {
+        let mut app = folded_app(first_sample(Instant::now()));
+        assert_eq!(labels(&app), ["notes", "shop"]);
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).expect("test terminal");
+        terminal.draw(|frame| app.draw(frame)).expect("draw");
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn an_unfolded_project_shows_its_workspaces_folded_and_a_reading_keeps_it_open() {
+        let now = Instant::now();
+        let mut app = folded_app(first_sample(now));
+        unfold(&mut app, &[RowId::Project(1)]);
+        assert_eq!(labels(&app), ["notes", "main", "feature-x (worktree)", "shop"]);
+        assert_eq!(folded(&app, RowId::Workspace(1)), Some(true));
+        app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
+        assert_eq!(labels(&app), ["notes", "main", "feature-x (worktree)", "shop"]);
+    }
+
+    #[test]
+    fn a_new_process_with_children_under_an_open_pane_arrives_folded() {
+        let now = Instant::now();
+        let mut app = folded_app(first_sample(now));
+        unfold(&mut app, &TO_CARGO);
+        let mut next = second_sample(now);
+        next.processes.push(process(203, 202, 2, 10, 0));
+        app.update(Update::Reading(Ok(reading(next))), now);
+        assert_eq!(folded(&app, RowId::Process { pane: 2, pid: 202 }), Some(true));
+        assert!(!labels(&app).contains(&"proc203".to_owned()));
+    }
+
+    #[test]
+    fn a_folded_process_on_the_hot_path_stays_hot() {
+        let mut app = folded_app(first_sample(Instant::now()));
+        unfold(&mut app, &[RowId::Project(1), RowId::Workspace(1), RowId::Tab(1), RowId::Pane(1)]);
+        let shell = index_of(&app, RowId::Process { pane: 1, pid: 100 });
+        assert_eq!(app.view().rows[shell].folded, Some(true));
+        assert!(app.view().rows[shell].hot);
+    }
+
+    #[test]
+    fn folding_above_the_selection_selects_the_folded_ancestor() {
+        let mut app = folded_app(first_sample(Instant::now()));
+        unfold(&mut app, &TO_CARGO);
+        let cargo = index_of(&app, RowId::Process { pane: 2, pid: 201 });
+        app.state.select(&app.lines, cargo);
+        app.state.fold(RowId::Workspace(1), true);
+        app.relayout();
+        assert_eq!(app.state.selected, Some(RowId::Workspace(1)));
+    }
+
+    #[test]
+    fn a_double_click_on_a_folded_project_opens_its_claude() {
+        let mut app = folded_app(first_sample(Instant::now()));
+        let (x, y) = find(&draw(&mut app, 100, 30), "▸ notes");
+        let start = Instant::now();
+        app.handle(&click(x + 4, y), start);
+        draw(&mut app, 100, 30);
+        app.handle(&click(x + 4, y), start + Duration::from_millis(300));
+        assert_eq!(app.state.tab, ViewTab::Context);
+        assert_eq!(app.state.agent, Some(1));
+    }
+
+    #[test]
+    fn entering_context_from_a_folded_project_marks_its_claude() {
+        let mut app = folded_app(first_sample(Instant::now()));
+        let notes = index_of(&app, RowId::Project(1));
+        app.state.select(&app.lines, notes);
+        app.handle(&key(KeyCode::Tab), Instant::now());
+        assert_eq!(app.state.agent, Some(1));
     }
 }
 
@@ -320,6 +428,7 @@ mod mouse_and_keys {
         let mut app = app_with(first_sample(Instant::now()), Some(usage::Sort::Memory));
         let (_, y) = find(&draw(&mut app, 100, 30), "%2 cargo");
         app.handle(&click(40, y), Instant::now());
+        let unfolded = app.state.unfolded.clone();
         app.handle(&key(KeyCode::Tab), Instant::now());
         draw(&mut app, 100, 8);
         for event in [key(KeyCode::Down), key(KeyCode::Enter), key(KeyCode::Char('s'))] {
@@ -330,7 +439,7 @@ mod mouse_and_keys {
         assert_eq!(app.state.selected, Some(RowId::Pane(2)));
         assert_eq!(app.state.sort, Some(usage::Sort::Memory));
         assert_eq!(app.view().scroll, 0);
-        assert!(app.state.folded.is_empty());
+        assert_eq!(app.state.unfolded, unfolded);
         let (x, y) = find(&draw(&mut app, 100, 8), "Processes ");
         app.handle(&click(x, y), Instant::now());
         assert_eq!(app.view().tab, ViewTab::Processes);
@@ -347,6 +456,7 @@ mod context_view {
     fn with_context(sample: Sample, context: PaneContext) -> App {
         let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         app.update(Update::Reading(Ok(Reading { context: Some(context), ..reading(sample) })), Instant::now());
+        unfold_all(&mut app);
         app
     }
 
@@ -551,7 +661,7 @@ mod event_loop {
         send.send(Update::Reading(Ok(reading(first_sample(Instant::now()))))).expect("send the update");
         let mut events = Scripted(VecDeque::from([None, Some(key(KeyCode::Char('q')))]));
         run_loop(&mut terminal, &mut app, &mut events, &updates).expect("the loop ends cleanly");
-        find(terminal.backend().buffer(), "%1 claude");
+        find(terminal.backend().buffer(), "▸ notes");
         assert!(events.0.is_empty());
     }
 

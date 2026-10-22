@@ -1,6 +1,6 @@
 # 020 — El árbol empieza plegado
 
-- **Estado**: en curso
+- **Estado**: hecho
 - **Depende de**: 018
 - **Estimación**: ~150 líneas (sobre todo tests y snapshots)
 

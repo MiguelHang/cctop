@@ -11,8 +11,8 @@ pub(crate) struct Line {
     pub(super) row: Row,
 }
 
-pub(super) fn lines(tree: &Tree, folded: &HashSet<RowId>) -> Vec<Line> {
-    let mut flat = Flat { folded, lines: Vec::new() };
+pub(super) fn lines(tree: &Tree, unfolded: &HashSet<RowId>) -> Vec<Line> {
+    let mut flat = Flat { unfolded, lines: Vec::new() };
     tree.projects.iter().for_each(|project| flat.project(project));
     flat.lines
 }
@@ -43,13 +43,13 @@ fn rows(state: &State, lines: &[Line], history: &History) -> Vec<Row> {
 }
 
 struct Flat<'a> {
-    folded: &'a HashSet<RowId>,
+    unfolded: &'a HashSet<RowId>,
     lines: Vec<Line>,
 }
 
 impl Flat<'_> {
     fn push(&mut self, id: RowId, row: Row, children: bool) -> bool {
-        let folded = self.folded.contains(&id);
+        let folded = !self.unfolded.contains(&id);
         self.lines.push(Line { id, row: Row { folded: children.then_some(folded), ..row } });
         children && !folded
     }
@@ -93,6 +93,40 @@ impl Flat<'_> {
             process.children.iter().for_each(|child| self.process(pane, depth.saturating_add(1), child));
         }
     }
+}
+
+pub(super) fn path(tree: &Tree, id: RowId) -> Vec<RowId> {
+    tree.projects.iter().find_map(|project| project_path(project, id)).unwrap_or_default()
+}
+
+fn within(own: RowId, id: RowId, inner: impl FnOnce() -> Option<Vec<RowId>>) -> Option<Vec<RowId>> {
+    if own == id {
+        return Some(vec![own]);
+    }
+    let mut rest = inner()?;
+    rest.insert(0, own);
+    Some(rest)
+}
+
+fn project_path(project: &ProjectNode, id: RowId) -> Option<Vec<RowId>> {
+    within(RowId::Project(project.id), id, || project.workspaces.iter().find_map(|w| workspace_path(w, id)))
+}
+
+fn workspace_path(workspace: &WorkspaceNode, id: RowId) -> Option<Vec<RowId>> {
+    within(RowId::Workspace(workspace.id), id, || workspace.tabs.iter().find_map(|tab| tab_path(tab, id)))
+}
+
+fn tab_path(tab: &TabNode, id: RowId) -> Option<Vec<RowId>> {
+    within(RowId::Tab(tab.id), id, || tab.panes.iter().find_map(|pane| pane_path(pane, id)))
+}
+
+fn pane_path(pane: &PaneNode, id: RowId) -> Option<Vec<RowId>> {
+    within(RowId::Pane(pane.id), id, || pane.processes.iter().find_map(|process| process_path(pane.id, process, id)))
+}
+
+fn process_path(pane: u64, process: &ProcessNode, id: RowId) -> Option<Vec<RowId>> {
+    let own = RowId::Process { pane, pid: process.pid };
+    within(own, id, || process.children.iter().find_map(|child| process_path(pane, child, id)))
 }
 
 fn node(depth: u16, kind: RowKind, label: String, totals: Totals) -> Row {
