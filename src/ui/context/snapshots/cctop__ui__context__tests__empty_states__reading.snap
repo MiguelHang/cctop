@@ -1,8 +1,10 @@
 ---
 source: src/ui/context/tests.rs
-expression: "draw(context, 80, 4).backend()"
+expression: "draw(detail, 100, 6).backend()"
 ---
-" Processes  Context                                           mem 1.0 GB  cpu — "
-"Reading the Claude session of %1 claude…                                        "
-"                                                                                "
-"                                                                                "
+"╭─ Processes ─ Context ─────────╮╭─ shopfront › search-bar › %149 ─────────────────────────────────╮"
+"│▶ search-bar › %149         30%││Reading the Claude session of shopfront › search-bar › %149…     │"
+"│  main › %155               11%││                                                                 │"
+"│  cctop › main › %233         —││                                                                 │"
+"│                               ││                                                                 │"
+"╰─ ↑↓ choose ───────────────────╯╰─────────────────────────────────────────────────────────────────╯"

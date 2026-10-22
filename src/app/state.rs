@@ -25,18 +25,12 @@ pub(crate) struct State {
     pub(super) scroll: usize,
     pub(super) page: usize,
     pub(super) context_scroll: usize,
+    pub(super) agent: Option<u64>,
 }
 
 impl State {
     pub(super) fn new(sort: Option<Sort>) -> Self {
         Self { sort, page: 1, ..Self::default() }
-    }
-
-    pub(super) fn pane(&self) -> Option<u64> {
-        match self.selected? {
-            RowId::Pane(pane) | RowId::Process { pane, .. } => Some(pane),
-            RowId::Project(_) | RowId::Workspace(_) | RowId::Tab(_) => None,
-        }
     }
 
     pub(super) fn index(&self, lines: &[Line]) -> Option<usize> {
@@ -80,6 +74,15 @@ impl State {
     pub(super) fn scroll_by(&mut self, lines: &[Line], delta: isize) {
         self.scroll = self.scroll.saturating_add_signed(delta);
         self.reconcile(lines);
+    }
+
+    pub(super) fn step_agent(&mut self, agents: &[u64], delta: isize) {
+        let Some(last) = agents.len().checked_sub(1) else { return };
+        let index = match agents.iter().position(|pane| Some(*pane) == self.agent) {
+            Some(at) => at.saturating_add_signed(delta).min(last),
+            None => 0,
+        };
+        self.agent = agents.get(index).copied();
     }
 
     pub(super) fn fold(&mut self, id: RowId, fold: bool) {

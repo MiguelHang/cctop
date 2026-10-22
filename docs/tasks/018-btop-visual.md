@@ -1,6 +1,6 @@
 # 018 — Aspecto tipo btop y Context con su lista de agentes
 
-- **Estado**: en curso
+- **Estado**: hecho
 - **Depende de**: 017
 - **Paralelo con**: 019 (no toca `src/cornercase/open*`, `cornercase-plugin.toml` ni `design/plugin.md`)
 - **Estimación**: ~900 líneas (histórico ~150, ui ~400, app ~150, tests y snapshots aparte)

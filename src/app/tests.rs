@@ -17,8 +17,9 @@ use crate::cornercase::{Client, Snapshot};
 use crate::error::Result;
 use crate::procs::fake::{FakeKiller, FakeSource};
 use crate::procs::{Pid, Process, Sample};
+pub(super) use crate::test_util::find;
 use crate::test_util::fixture;
-use crate::ui::{ContextView, Sort, ViewTab};
+use crate::ui::{Sort, ViewTab};
 use crate::usage;
 
 pub(super) const STATUS: &str = fixture!("cornercase/status-0.12.173.json");
@@ -96,16 +97,6 @@ pub(super) fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
     terminal.backend().buffer().clone()
 }
 
-pub(super) fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
-    (0..buffer.area.height)
-        .find_map(|y| {
-            let line: String = (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect();
-            let at = line.find(text)?;
-            Some((u16::try_from(line[..at].chars().count()).expect("narrow line"), y))
-        })
-        .expect("the text is on screen")
-}
-
 pub(super) fn click(column: u16, row: u16) -> Event {
     mouse(MouseEventKind::Down(MouseButton::Left), column, row)
 }
@@ -162,6 +153,42 @@ mod ticking {
     }
 
     #[test]
+    fn each_reading_adds_to_the_history_as_a_share_of_the_machine() {
+        let mut sampler = fake_sampler();
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.machine = super::super::Machine { cpus: 4, memory: Some(8_000 * MB) };
+        app.update(Update::Reading(sampler.tick()), Instant::now());
+        app.update(Update::Reading(sampler.tick()), Instant::now());
+        let graphs = app.view().graphs;
+        assert_eq!(graphs.cpu, [25.0]);
+        assert_eq!(graphs.memory, [495 * MB, 505 * MB]);
+        assert_eq!((graphs.points, graphs.row_points, graphs.machine_memory), (1800, 30, Some(8_000 * MB)));
+        let claude = index_of(&app, RowId::Process { pane: 1, pid: 101 });
+        app.state.page = claude + 1;
+        assert_eq!(app.view().rows[claude].cpu_history, [None, Some(100.0)]);
+    }
+
+    #[test]
+    fn only_the_rows_on_screen_carry_their_history() {
+        let mut sampler = fake_sampler();
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.update(Update::Reading(sampler.tick()), Instant::now());
+        app.update(Update::Reading(sampler.tick()), Instant::now());
+        let claude = index_of(&app, RowId::Process { pane: 1, pid: 101 });
+        app.state.page = claude;
+        assert_eq!(app.view().rows[claude].cpu_history, Vec::<Option<f64>>::new());
+        app.state.scroll = 1;
+        assert_eq!(app.view().rows[claude].cpu_history.len(), 2);
+    }
+
+    #[test]
+    fn a_sort_change_adds_nothing_to_the_history() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        app.handle(&key(KeyCode::Char('s')), Instant::now());
+        assert_eq!(app.view().graphs.memory.len(), 1);
+    }
+
+    #[test]
     fn a_failed_status_shows_the_error_and_keeps_the_last_tree() {
         let now = Instant::now();
         let mut app = app_with(first_sample(now), None);
@@ -197,7 +224,7 @@ mod ticking {
         let mut app = app_with(first_sample(Instant::now()), None);
         app.notice = Some("bad config".to_owned());
         assert_eq!(app.view().header.error.as_deref(), Some("bad config"));
-        app.handle(&key(KeyCode::Down));
+        app.handle(&key(KeyCode::Down), Instant::now());
         assert_eq!(app.view().header.error, None);
     }
 }
@@ -239,7 +266,7 @@ mod mouse_and_keys {
     fn clicking_the_cpu_header_sorts_by_cpu() {
         let mut app = app_with(first_sample(Instant::now()), None);
         let (x, y) = find(&draw(&mut app, 100, 30), "CPU");
-        app.handle(&click(x, y));
+        app.handle(&click(x, y), Instant::now());
         assert_eq!(app.state.sort, Some(usage::Sort::Cpu));
         assert_eq!(app.view().sort, Sort::Cpu);
     }
@@ -248,11 +275,11 @@ mod mouse_and_keys {
     fn s_cycles_memory_cpu_and_cornercase_order() {
         let mut app = app_with(first_sample(Instant::now()), Some(usage::Sort::Memory));
         assert_eq!(labels(&app)[0], "notes");
-        app.handle(&key(KeyCode::Char('s')));
+        app.handle(&key(KeyCode::Char('s')), Instant::now());
         assert_eq!(app.view().sort, Sort::Cpu);
-        app.handle(&key(KeyCode::Char('s')));
+        app.handle(&key(KeyCode::Char('s')), Instant::now());
         assert_eq!(app.view().sort, Sort::Name);
-        app.handle(&key(KeyCode::Char('s')));
+        app.handle(&key(KeyCode::Char('s')), Instant::now());
         assert_eq!(app.view().sort, Sort::Memory);
     }
 
@@ -260,10 +287,10 @@ mod mouse_and_keys {
     fn clicking_the_arrow_folds_and_unfolds() {
         let mut app = app_with(first_sample(Instant::now()), None);
         let (x, y) = find(&draw(&mut app, 100, 30), "▾ %1 claude");
-        app.handle(&click(x, y));
+        app.handle(&click(x, y), Instant::now());
         assert!(!labels(&app).contains(&"proc100".to_owned()));
         let (x, y) = find(&draw(&mut app, 100, 30), "▸ %1 claude");
-        app.handle(&click(x, y));
+        app.handle(&click(x, y), Instant::now());
         assert!(labels(&app).contains(&"proc100".to_owned()));
     }
 
@@ -271,10 +298,10 @@ mod mouse_and_keys {
     fn clicking_a_row_selects_it_and_a_tab_switches_view() {
         let mut app = app_with(first_sample(Instant::now()), None);
         let (_, y) = find(&draw(&mut app, 100, 30), "%2 cargo");
-        app.handle(&click(40, y));
+        app.handle(&click(40, y), Instant::now());
         assert_eq!(app.state.selected, Some(RowId::Pane(2)));
         let (x, y) = find(&draw(&mut app, 100, 30), "Context ");
-        app.handle(&click(x, y));
+        app.handle(&click(x, y), Instant::now());
         assert_eq!(app.view().tab, ViewTab::Context);
     }
 
@@ -282,9 +309,9 @@ mod mouse_and_keys {
     fn the_wheel_scrolls() {
         let mut app = app_with(first_sample(Instant::now()), None);
         draw(&mut app, 100, 8);
-        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 4));
+        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 4), Instant::now());
         assert_eq!(app.view().scroll, 3);
-        app.handle(&mouse(MouseEventKind::ScrollUp, 10, 4));
+        app.handle(&mouse(MouseEventKind::ScrollUp, 10, 4), Instant::now());
         assert_eq!(app.view().scroll, 0);
     }
 
@@ -292,26 +319,30 @@ mod mouse_and_keys {
     fn the_context_tab_leaves_the_process_list_alone() {
         let mut app = app_with(first_sample(Instant::now()), Some(usage::Sort::Memory));
         let (_, y) = find(&draw(&mut app, 100, 30), "%2 cargo");
-        app.handle(&click(40, y));
-        app.handle(&key(KeyCode::Tab));
+        app.handle(&click(40, y), Instant::now());
+        app.handle(&key(KeyCode::Tab), Instant::now());
         draw(&mut app, 100, 8);
         for event in [key(KeyCode::Down), key(KeyCode::Enter), key(KeyCode::Char('s'))] {
-            app.handle(&event);
+            app.handle(&event, Instant::now());
         }
-        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 4));
-        app.handle(&click(40, y));
+        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 4), Instant::now());
+        app.handle(&click(40, y), Instant::now());
         assert_eq!(app.state.selected, Some(RowId::Pane(2)));
         assert_eq!(app.state.sort, Some(usage::Sort::Memory));
         assert_eq!(app.view().scroll, 0);
         assert!(app.state.folded.is_empty());
         let (x, y) = find(&draw(&mut app, 100, 8), "Processes ");
-        app.handle(&click(x, y));
+        app.handle(&click(x, y), Instant::now());
         assert_eq!(app.view().tab, ViewTab::Processes);
     }
 }
 
 mod context_view {
     use super::*;
+    use crate::context::breakdown::{Breakdown, Estimate, Part, PartKind};
+    use crate::ui::ContextDetail;
+
+    const SECOND: &str = "notes › feature-x › %7";
 
     fn with_context(sample: Sample, context: PaneContext) -> App {
         let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
@@ -322,32 +353,106 @@ mod context_view {
     fn select(app: &mut App, id: RowId) {
         let index = index_of(app, id);
         app.state.select(&app.lines, index);
-        app.handle(&Event::FocusGained);
+        app.handle(&Event::FocusGained, Instant::now());
+    }
+
+    fn enter(app: &mut App) {
+        app.handle(&key(KeyCode::Tab), Instant::now());
     }
 
     #[test]
-    fn selecting_a_row_asks_the_sampler_for_its_pane_once() {
+    fn the_processes_selection_asks_the_sampler_for_its_agent_once() {
         let mut app = app_with(first_sample(Instant::now()), None);
         let (panes, asked) = mpsc::channel();
         app.panes = Some(panes);
+        select(&mut app, RowId::Pane(7));
+        select(&mut app, RowId::Process { pane: 7, pid: 300 });
         select(&mut app, RowId::Pane(2));
-        select(&mut app, RowId::Process { pane: 2, pid: 201 });
-        select(&mut app, RowId::Pane(1));
-        select(&mut app, RowId::Project(1));
-        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(2), Some(1), None]);
+        select(&mut app, RowId::Project(2));
+        select(&mut app, RowId::Tab(3));
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(7), None, Some(7)]);
+    }
+
+    #[test]
+    fn processes_without_a_claude_selected_reads_no_session_until_context_opens() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (panes, asked) = mpsc::channel();
+        app.panes = Some(panes);
+        draw(&mut app, 100, 30);
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), []);
+        enter(&mut app);
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(1)]);
+    }
+
+    #[test]
+    fn entering_with_nothing_selected_marks_the_agent_with_most_context() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        enter(&mut app);
+        assert_eq!(app.state.agent, Some(1));
+        let context = app.view().context;
+        assert_eq!((context.marked, context.agents.len()), (Some(0), 2));
+        assert_eq!(context.detail, ContextDetail::Reading { pane: "notes › main › %1".to_owned() });
+    }
+
+    #[test]
+    fn entering_with_a_tab_selected_marks_its_claude() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        select(&mut app, RowId::Tab(3));
+        enter(&mut app);
+        assert_eq!(app.state.agent, Some(7));
+        assert_eq!(app.view().context.marked, Some(1));
+    }
+
+    #[test]
+    fn entering_from_a_row_without_claude_marks_the_most_context() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        select(&mut app, RowId::Pane(2));
+        enter(&mut app);
+        assert_eq!(app.state.agent, Some(1));
+    }
+
+    #[test]
+    fn a_click_on_an_agent_changes_the_breakdown() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (panes, asked) = mpsc::channel();
+        app.panes = Some(panes);
+        enter(&mut app);
+        let (x, y) = find(&draw(&mut app, 100, 30), "%7");
+        app.handle(&click(x, y), Instant::now());
+        assert_eq!(app.state.agent, Some(7));
+        assert_eq!(app.view().context.detail, ContextDetail::Reading { pane: SECOND.to_owned() });
+        assert_eq!(asked.try_iter().last(), Some(Some(7)));
+    }
+
+    #[test]
+    fn arrows_move_the_mark_down_the_list() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        enter(&mut app);
+        app.handle(&key(KeyCode::Down), Instant::now());
+        assert_eq!(app.state.agent, Some(7));
+        assert_eq!(app.state.selected, None);
+    }
+
+    #[test]
+    fn a_marked_agent_that_goes_away_hands_the_mark_to_the_first() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        enter(&mut app);
+        app.state.agent = Some(99);
+        app.update(Update::Reading(Ok(reading(first_sample(Instant::now())))), Instant::now());
+        assert_eq!(app.state.agent, Some(1));
     }
 
     #[test]
     fn a_context_answer_keeps_the_error_and_the_last_answer_time() {
         let start = Instant::now();
-        let mut app = with_context(first_sample(start), PaneContext { pane: 2, found: Found::NoClaude });
+        let mut app = with_context(first_sample(start), PaneContext { pane: 7, found: Found::NoClaude });
         app.update(Update::Reading(Err("cornercase: server not running".to_owned())), start);
-        select(&mut app, RowId::Pane(2));
-        app.update(Update::Context(Some(PaneContext { pane: 2, found: Found::NoSession(201) })), start + INTERVAL * 9);
+        select(&mut app, RowId::Pane(7));
+        app.update(Update::Context(Some(PaneContext { pane: 7, found: Found::NoSession(300) })), start + INTERVAL * 9);
         assert_eq!(app.answered, start);
         assert_eq!(app.view().header.error.as_deref(), Some("cornercase: server not running"));
-        app.handle(&key(KeyCode::Tab));
-        assert_eq!(app.view().context, ContextView::NoSession { pane: "%2 cargo".to_owned(), pid: 201 });
+        enter(&mut app);
+        assert_eq!(app.view().context.detail, ContextDetail::NoSession { pane: SECOND.to_owned(), pid: 300 });
     }
 
     #[test]
@@ -355,40 +460,75 @@ mod context_view {
         let mut app = app_with(first_sample(Instant::now()), None);
         let (panes, asked) = mpsc::channel();
         app.panes = Some(panes);
-        let index = index_of(&app, RowId::Pane(2));
+        let index = index_of(&app, RowId::Pane(7));
         app.state.select(&app.lines, index);
         draw(&mut app, 100, 30);
-        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(2)]);
+        assert_eq!(asked.try_iter().collect::<Vec<_>>(), [Some(7)]);
     }
 
     #[test]
-    fn shows_the_selected_pane_and_processes_keeps_the_selection() {
-        let mut app = with_context(first_sample(Instant::now()), PaneContext { pane: 2, found: Found::NoClaude });
-        select(&mut app, RowId::Pane(2));
-        app.handle(&key(KeyCode::Tab));
-        assert_eq!(app.view().context, ContextView::NoClaude { pane: "%2 cargo".to_owned() });
-        select(&mut app, RowId::Pane(1));
-        assert_eq!(app.view().context, ContextView::Reading { pane: "%1 claude".to_owned() });
-        app.handle(&key(KeyCode::Tab));
+    fn a_context_of_another_agent_shows_as_being_read_and_processes_keeps_the_selection() {
+        let mut app = with_context(first_sample(Instant::now()), PaneContext { pane: 7, found: Found::NoClaude });
+        select(&mut app, RowId::Pane(7));
+        enter(&mut app);
+        assert_eq!(app.view().context.detail, ContextDetail::NoClaude { pane: SECOND.to_owned() });
+        app.handle(&key(KeyCode::Up), Instant::now());
+        assert_eq!(app.view().context.detail, ContextDetail::Reading { pane: "notes › main › %1".to_owned() });
+        app.handle(&key(KeyCode::Tab), Instant::now());
         assert_eq!(app.view().tab, ViewTab::Processes);
-        assert_eq!(app.state.selected, Some(RowId::Pane(1)));
+        assert_eq!(app.state.selected, Some(RowId::Pane(7)));
     }
 
     #[test]
     fn the_wheel_scrolls_the_breakdown_up_to_its_end() {
-        let breakdown =
-            crate::context::breakdown::Breakdown { total: Some(10), fixed: Vec::new(), dynamic: Vec::new() };
+        let part = |n: u64| Part { kind: PartKind::File(format!("/f{n}")), tokens: Estimate(n) };
+        let breakdown = Breakdown { total: Some(100), fixed: Vec::new(), dynamic: (1..=10).map(part).collect() };
         let mut app =
             with_context(first_sample(Instant::now()), PaneContext { pane: 1, found: Found::Session(101, breakdown) });
-        select(&mut app, RowId::Pane(1));
-        app.handle(&key(KeyCode::Tab));
-        app.handle(&mouse(MouseEventKind::ScrollDown, 10, 8));
+        enter(&mut app);
+        app.handle(&mouse(MouseEventKind::ScrollDown, 50, 6), Instant::now());
         assert_eq!(app.state.context_scroll, 3);
         draw(&mut app, 100, 8);
         assert_eq!(app.state.context_scroll, 3);
         draw(&mut app, 100, 30);
         assert_eq!(app.state.context_scroll, 0);
-        assert_eq!(app.state.selected, Some(RowId::Pane(1)));
+    }
+}
+
+mod double_click {
+    use super::*;
+
+    const SOON: Duration = Duration::from_millis(300);
+
+    fn clicked_twice(on: &str, gap: Duration) -> App {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (x, y) = find(&draw(&mut app, 100, 30), on);
+        let start = Instant::now();
+        app.handle(&click(x + 4, y), start);
+        draw(&mut app, 100, 30);
+        app.handle(&click(x + 4, y), start + gap);
+        app
+    }
+
+    #[test]
+    fn on_a_pane_with_claude_opens_its_context() {
+        let app = clicked_twice("%7 claude", SOON);
+        assert_eq!(app.state.tab, ViewTab::Context);
+        assert_eq!(app.state.agent, Some(7));
+    }
+
+    #[test]
+    fn too_slow_is_two_clicks() {
+        let app = clicked_twice("%7 claude", Duration::from_secs(1));
+        assert_eq!(app.state.tab, ViewTab::Processes);
+        assert_eq!(app.state.selected, Some(RowId::Pane(7)));
+    }
+
+    #[test]
+    fn on_a_pane_without_claude_only_selects_it() {
+        let app = clicked_twice("%2 cargo", SOON);
+        assert_eq!(app.state.tab, ViewTab::Processes);
+        assert_eq!(app.state.selected, Some(RowId::Pane(2)));
     }
 }
 
@@ -426,9 +566,26 @@ mod event_loop {
     }
 
     #[test]
+    fn a_mouse_moving_without_a_button_does_not_draw_again() {
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        let (_send, updates) = mpsc::channel();
+        let moved = Some(mouse(MouseEventKind::Moved, 10, 4));
+        let script = [None, moved.clone(), moved, None, Some(key(KeyCode::Char('q')))];
+        run_loop(&mut terminal, &mut app, &mut Scripted(VecDeque::from(script)), &updates).expect("the loop ends");
+        assert_eq!(terminal.get_frame().count(), 1);
+    }
+
+    #[test]
+    fn esc_quits_without_a_dialog() {
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        assert_eq!(app.handle(&key(KeyCode::Esc), Instant::now()), Flow::Quit);
+    }
+
+    #[test]
     fn ctrl_c_quits_too() {
         let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
         let event = Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
-        assert_eq!(app.handle(&event), Flow::Quit);
+        assert_eq!(app.handle(&event, Instant::now()), Flow::Quit);
     }
 }

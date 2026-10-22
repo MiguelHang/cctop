@@ -144,12 +144,21 @@ fn page_size() -> u64 {
     u64::try_from(size).ok().filter(|&size| size > 0).unwrap_or(DEFAULT_PAGE_SIZE)
 }
 
+pub(crate) fn machine_memory() -> Option<u64> {
+    mem_total(&String::from_utf8_lossy(&read_file(Path::new("/proc/meminfo"))?))
+}
+
+fn meminfo_kib(meminfo: &str, key: &str) -> Option<u64> {
+    let line = meminfo.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))?;
+    line.split_whitespace().next()?.parse::<u64>().ok()
+}
+
+fn mem_total(meminfo: &str) -> Option<u64> {
+    meminfo_kib(meminfo, "MemTotal").filter(|&kib| kib > 0).map(|kib| kib.saturating_mul(1024))
+}
+
 fn swapped(meminfo: &str) -> bool {
-    let kib = |key: &str| {
-        let line = meminfo.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))?;
-        line.split_whitespace().next()?.parse::<u64>().ok()
-    };
-    match (kib("SwapTotal"), kib("SwapFree")) {
+    match (meminfo_kib(meminfo, "SwapTotal"), meminfo_kib(meminfo, "SwapFree")) {
         (Some(total), Some(free)) => total > free,
         _ => true,
     }
@@ -201,7 +210,8 @@ fn parse_stat(text: &str) -> Option<Stat> {
 }
 
 fn parse_cmdline(bytes: &[u8]) -> Vec<String> {
-    let bytes = bytes.strip_suffix(&[0]).unwrap_or(bytes);
+    let end = bytes.iter().rposition(|&byte| byte != 0).map_or(0, |last| last + 1);
+    let bytes = &bytes[..end];
     if bytes.is_empty() {
         return Vec::new();
     }

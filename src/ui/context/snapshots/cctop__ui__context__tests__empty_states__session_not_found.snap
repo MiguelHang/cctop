@@ -1,8 +1,10 @@
 ---
 source: src/ui/context/tests.rs
-expression: "draw(context, 80, 4).backend()"
+expression: "draw(detail, 100, 6).backend()"
 ---
-" Processes  Context                                           mem 1.0 GB  cpu — "
-"No Claude session found for claude (pid 4242) in %1 claude.                     "
-"                                                                                "
-"                                                                                "
+"╭─ Processes ─ Context ─────────╮╭─ shopfront › search-bar › %149 ─────────────────────────────────╮"
+"│▶ search-bar › %149         30%││No Claude session found for claude (pid 4242) in shopfront › spr…│"
+"│  main › %155               11%││                                                                 │"
+"│  cctop › main › %233         —││                                                                 │"
+"│                               ││                                                                 │"
+"╰─ ↑↓ choose ───────────────────╯╰─────────────────────────────────────────────────────────────────╯"

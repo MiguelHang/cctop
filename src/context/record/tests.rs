@@ -143,6 +143,25 @@ mod tools {
         assert_eq!(tool_of(name, input), Some(tool));
     }
 
+    #[rstest]
+    #[case::semicolon("cd /x/y; git diff", "git diff")]
+    #[case::and("cd /x/y && cargo test --locked", "cargo test --locked")]
+    #[case::without_spaces("cd /x/y&&ls", "ls")]
+    #[case::quoted_path(r#"cd "/a b/c" && git status"#, "git status")]
+    #[case::single_quoted_path("cd '/a b'; ls", "ls")]
+    #[case::twice("cd /x && cd y; make", "make")]
+    #[case::leading_spaces("  cd /x; ls", "ls")]
+    #[case::only_a_cd("cd /x/y", "cd /x/y")]
+    #[case::nothing_after_it("cd /x/y && ", "cd /x/y && ")]
+    #[case::an_unclosed_quote(r#"cd "/x && ls"#, r#"cd "/x && ls"#)]
+    #[case::a_pipe_is_kept("cd /x | ls", "cd /x | ls")]
+    #[case::not_a_cd("cdk deploy; ls", "cdk deploy; ls")]
+    #[case::cd_later("ls; cd /x; ls", "ls; cd /x; ls")]
+    fn a_leading_cd_is_left_out_of_the_command(#[case] command: &str, #[case] expected: &str) {
+        let input = serde_json::json!({ "command": command }).to_string();
+        assert_eq!(tool_of("Bash", &input), Some(Tool::Command(expected.to_owned())));
+    }
+
     #[test]
     fn a_tool_use_without_an_id_is_dropped() {
         let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{}}]}}"#;

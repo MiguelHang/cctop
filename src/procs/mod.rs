@@ -67,6 +67,20 @@ pub(crate) fn system() -> impl ProcessSource {
     macos::MacosSource::new()
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) fn machine_memory() -> Option<u64> {
+    linux::machine_memory()
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn machine_memory() -> Option<u64> {
+    macos::machine_memory()
+}
+
+pub(crate) fn cpus() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+}
+
 pub(crate) fn cpu_percent(prev: &Sample, next: &Sample) -> HashMap<Pid, f64> {
     let wall = next.taken.saturating_duration_since(prev.taken).as_secs_f64();
     if wall <= 0.0 {

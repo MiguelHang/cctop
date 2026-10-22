@@ -5,12 +5,11 @@ use std::path::Path;
 #[cfg(test)]
 pub(super) mod fake;
 
-use super::view::pane_label;
 use crate::context::breakdown::{Breakdown, Part, PartKind};
 use crate::context::{Claude, Sessions, session};
 use crate::cornercase::Snapshot;
 use crate::procs::{Pid, Process, Sample};
-use crate::ui::{ContextPart, ContextPercent, ContextSession, ContextView};
+use crate::ui::{ContextDetail, ContextPart, ContextPercent, ContextSession};
 use crate::usage::{self, PaneNode, Tree};
 
 const CLAUDE: &str = "claude";
@@ -88,18 +87,17 @@ pub(super) fn pane_node(tree: &Tree, id: u64) -> Option<&PaneNode> {
     tabs.flat_map(|tab| &tab.panes).find(|pane| pane.id == id)
 }
 
-pub(super) fn view(pane: Option<&PaneNode>, context: Option<&PaneContext>, scroll: usize) -> ContextView {
-    let Some(pane) = pane else { return ContextView::NoPane };
-    let label = pane_label(pane);
+pub(super) fn view(pane: Option<(&PaneNode, &str)>, context: Option<&PaneContext>, scroll: usize) -> ContextDetail {
+    let Some((pane, label)) = pane else { return ContextDetail::NoAgent };
+    let label = label.to_owned();
     match context.filter(|context| context.pane == pane.id).map(|context| &context.found) {
-        None => ContextView::Reading { pane: label },
-        Some(Found::NoClaude) => ContextView::NoClaude { pane: label },
-        Some(&Found::NoSession(pid)) => ContextView::NoSession { pane: label, pid },
-        Some(Found::Session(pid, breakdown)) => {
+        None => ContextDetail::Reading { pane: label },
+        Some(Found::NoClaude) => ContextDetail::NoClaude { pane: label },
+        Some(&Found::NoSession(pid)) => ContextDetail::NoSession { pane: label, pid },
+        Some(Found::Session(_, breakdown)) => {
             let root = pane.path.as_deref();
-            ContextView::Session(ContextSession {
+            ContextDetail::Session(ContextSession {
                 pane: label,
-                pid: *pid,
                 total: breakdown.total,
                 percent: breakdown.total.zip(pane.context_percent).and_then(|(total, shown)| percent(total, shown)),
                 fixed: parts(&breakdown.fixed, root),

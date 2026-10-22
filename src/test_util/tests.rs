@@ -1,7 +1,10 @@
 use std::cell::Cell;
 use std::time::Duration;
 
-use super::{TempDir, wait_until, wait_until_within};
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+
+use super::{TempDir, find, wait_until, wait_until_within};
 
 mod temp_dir {
     use super::*;
@@ -46,5 +49,16 @@ mod fixtures {
     #[test]
     fn reads_from_the_fixtures_folder() {
         assert_eq!(crate::test_util::fixture!(".gitkeep"), "");
+    }
+}
+
+mod screen {
+    use super::*;
+
+    #[test]
+    fn finds_text_by_column_and_line() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
+        buffer.set_string(0, 1, "→ a b", ratatui::style::Style::new());
+        assert_eq!(find(&buffer, "b"), (4, 1));
     }
 }

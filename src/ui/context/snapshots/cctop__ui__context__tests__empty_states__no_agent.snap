@@ -1,0 +1,10 @@
+---
+source: src/ui/context/tests.rs
+expression: "draw(detail, 100, 6).backend()"
+---
+"╭─ Processes ─ Context ─────────╮╭─────────────────────────────────────────────────────────────────╮"
+"│▶ search-bar › %149         30%││No Claude agent in cornercase's panes.                           │"
+"│  main › %155               11%││                                                                 │"
+"│  cctop › main › %233         —││                                                                 │"
+"│                               ││                                                                 │"
+"╰─ ↑↓ choose ───────────────────╯╰─────────────────────────────────────────────────────────────────╯"

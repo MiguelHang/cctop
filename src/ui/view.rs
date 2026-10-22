@@ -41,6 +41,7 @@ pub(crate) struct Row {
     pub(crate) context: Option<f64>,
     pub(crate) hot: bool,
     pub(crate) estimated: bool,
+    pub(crate) cpu_history: Vec<Option<f64>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -60,12 +61,36 @@ pub(crate) struct View {
     pub(crate) header: Header,
     pub(crate) context: ContextView,
     pub(crate) dialog: Option<Dialog>,
+    pub(crate) graphs: Graphs,
+    pub(crate) memory_threshold: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub(crate) enum ContextView {
+pub(crate) struct Graphs {
+    pub(crate) cpu: Vec<f64>,
+    pub(crate) memory: Vec<u64>,
+    pub(crate) points: usize,
+    pub(crate) machine_memory: Option<u64>,
+    pub(crate) row_points: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct ContextView {
+    pub(crate) agents: Vec<AgentRow>,
+    pub(crate) marked: Option<usize>,
+    pub(crate) detail: ContextDetail,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct AgentRow {
+    pub(crate) label: String,
+    pub(crate) percent: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) enum ContextDetail {
     #[default]
-    NoPane,
+    NoAgent,
     Reading {
         pane: String,
     },
@@ -82,7 +107,6 @@ pub(crate) enum ContextView {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct ContextSession {
     pub(crate) pane: String,
-    pub(crate) pid: u32,
     pub(crate) total: Option<u64>,
     pub(crate) percent: Option<ContextPercent>,
     pub(crate) fixed: Vec<ContextPart>,

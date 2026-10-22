@@ -1,11 +1,13 @@
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use rstest::rstest;
 
-use super::{Flow, handle};
+use super::{Flow, Lists, handle};
 use crate::app::state::{RowId, State};
 use crate::app::view::Line;
 use crate::ui::{Hits, Row, ViewTab};
 use crate::usage::Sort;
+
+const AGENTS: [u64; 3] = [7, 1, 2];
 
 fn line(id: RowId, folded: Option<bool>) -> Line {
     Line { id, row: Row { folded, ..Row::default() } }
@@ -21,7 +23,7 @@ fn lines() -> Vec<Line> {
 }
 
 fn press(state: &mut State, code: KeyCode) -> Flow {
-    handle(state, &lines(), &Hits::default(), &Event::Key(KeyEvent::from(code)))
+    handle(state, &Lists { lines: &lines(), agents: &AGENTS }, &Hits::default(), &Event::Key(KeyEvent::from(code)))
 }
 
 fn selected_at(at: usize) -> State {
@@ -92,8 +94,9 @@ mod keys {
     }
 
     #[test]
-    fn q_quits_and_other_keys_continue() {
+    fn q_and_esc_quit_and_other_keys_continue() {
         assert_eq!(press(&mut State::new(None), KeyCode::Char('q')), Flow::Quit);
+        assert_eq!(press(&mut State::new(None), KeyCode::Esc), Flow::Quit);
         assert_eq!(press(&mut State::new(None), KeyCode::Char('x')), Flow::Continue);
     }
 
@@ -106,7 +109,51 @@ mod keys {
             kind: KeyEventKind::Release,
             state: KeyEventState::NONE,
         };
-        assert_eq!(handle(&mut state, &lines(), &Hits::default(), &Event::Key(release)), Flow::Continue);
+        let lists = Lists { lines: &lines(), agents: &AGENTS };
+        assert_eq!(handle(&mut state, &lists, &Hits::default(), &Event::Key(release)), Flow::Continue);
+    }
+}
+
+mod choosing_an_agent {
+    use super::*;
+
+    fn in_context(agent: Option<u64>) -> State {
+        let mut state = State::new(None);
+        state.tab = ViewTab::Context;
+        state.agent = agent;
+        state
+    }
+
+    #[rstest]
+    #[case::down_moves_one(Some(7), KeyCode::Down, Some(1))]
+    #[case::up_moves_one(Some(1), KeyCode::Up, Some(7))]
+    #[case::down_stops_at_the_end(Some(2), KeyCode::Down, Some(2))]
+    #[case::up_stops_at_the_top(Some(7), KeyCode::Up, Some(7))]
+    #[case::from_nothing_takes_the_first(None, KeyCode::Down, Some(7))]
+    #[case::from_one_that_left_takes_the_first(Some(9), KeyCode::Up, Some(7))]
+    fn arrows_move_the_mark(#[case] from: Option<u64>, #[case] code: KeyCode, #[case] to: Option<u64>) {
+        let mut state = in_context(from);
+        press(&mut state, code);
+        assert_eq!(state.agent, to);
+    }
+
+    #[test]
+    fn arrows_leave_the_process_list_alone() {
+        let mut state = in_context(Some(7));
+        press(&mut state, KeyCode::Down);
+        assert_eq!(state.selected, None);
+    }
+
+    #[test]
+    fn without_agents_nothing_is_marked() {
+        let mut state = in_context(None);
+        handle(
+            &mut state,
+            &Lists { lines: &lines(), agents: &[] },
+            &Hits::default(),
+            &Event::Key(KeyEvent::from(KeyCode::Down)),
+        );
+        assert_eq!(state.agent, None);
     }
 }
 

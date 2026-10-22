@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use rstest::rstest;
 
-use super::{MacosSource, Timebase, c_string};
+use super::{MacosSource, Timebase, c_string, machine_memory};
 use crate::procs::probe;
 
 const MEMORY_PROBE: &str = "procs::macos::tests::real_processes::memory_probe";
@@ -57,6 +57,11 @@ mod real_processes {
     #[test]
     fn reads_the_cornercase_variables_of_a_child() {
         probe::reads_the_variables_of_a_child(&MacosSource::new());
+    }
+
+    #[test]
+    fn the_machine_holds_more_memory_than_the_test_process() {
+        probe::the_machine_holds_the_test_process(&MacosSource::new(), machine_memory());
     }
 
     #[test]

@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use ratatui::buffer::Buffer;
+
 const TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(20);
 
@@ -45,6 +47,20 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+pub(crate) fn screen_line(buffer: &Buffer, y: u16) -> String {
+    (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect()
+}
+
+pub(crate) fn find(buffer: &Buffer, text: &str) -> (u16, u16) {
+    (0..buffer.area.height)
+        .find_map(|y| {
+            let line = screen_line(buffer, y);
+            let at = line.find(text)?;
+            Some((u16::try_from(line[..at].chars().count()).expect("narrow line"), y))
+        })
+        .unwrap_or_else(|| panic!("{text:?} is not on screen"))
 }
 
 #[cfg(test)]
