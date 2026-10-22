@@ -1,6 +1,6 @@
 # 019 — Abrir cctop en un split del pane
 
-- **Estado**: en curso
+- **Estado**: hecho
 - **Depende de**: 014
 - **Paralelo con**: 018 (no toca `src/ui/`, `src/app/` ni `design/tui.md`)
 - **Estimación**: ~300 líneas (código ~120, tests ~180)

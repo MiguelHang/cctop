@@ -17,10 +17,11 @@ cornercase plugin link .
 cornercase plugin enable cctop
 ```
 
-- Al activarlo (`enable`) o con `cornercase plugin list`, cornercase muestra la acción `cctop`, el servicio `watch` y los permisos `read`, `notify`, `open`.
-- Elegir **cctop** en el menú desde un proyecto, un workspace, una pestaña y un pane: la primera vez crea el proyecto `cctop` (carpeta: el estado del plugin) con una pestaña que ejecuta cctop; las siguientes solo lo enfocan, sin abrir otra pestaña.
-- Cerrar el proyecto `cctop` y repetir la acción: vuelve a crearlo.
-- Salir de cctop con `q` en su pestaña y repetir la acción: añade una pestaña nueva en vez de enfocar la que quedó en la shell.
+- Al activarlo (`enable`) o con `cornercase plugin list`, cornercase muestra la acción `cctop`, el servicio `watch` y los permisos `read`, `notify`, `split`, `focus`.
+- Elegir **cctop** en el menú de un pane: se abre un split a su derecha que ejecuta cctop y queda enfocado. Desde una pestaña, un workspace o un proyecto, el split sale del pane activo (de la pestaña activa, del workspace activo).
+- Repetir la acción en la misma pestaña (desde cualquier pane suyo): enfoca el split de cctop, sin abrir otro.
+- Salir de cctop con `q` (o `Esc`): el pane se cierra sin dejar una shell. Repetir la acción: abre un split nuevo.
+- Con el binario en una ruta con espacios (`cornercase plugin link` desde una carpeta con espacio), la acción sigue abriendo cctop.
 - El servicio corre: `pgrep -a cctop` muestra un `cctop watch`, y `cornercase plugin logs cctop` no muestra errores (`cctop watch: …`).
 
 ## 2. Un proceso de varios GB (criterio de éxito 1)

@@ -32,10 +32,10 @@ Quien trabaja con varios agentes de código en cornercase a la vez (en primer lu
 
 ### Integración con cornercase
 - `cornercase-plugin.toml` con:
-  - una **acción** `cctop` en todos los contextos (project, workspace, tab, pane) que enfoca un proyecto **"cctop"** en el sidebar o, si no existe, lo crea (carpeta: `CORNERCASE_PLUGIN_STATE`) con una pestaña que ejecuta `cctop`. Una sola instancia y siempre en el mismo sitio.
+  - una **acción** `cctop` en todos los contextos (project, workspace, tab, pane) que abre cctop en un split a la derecha del pane donde se pulsa (o del pane activo de la pestaña, workspace o proyecto), enfocado; si esa pestaña ya tiene un pane con cctop, lo enfoca. Al salir de cctop el pane se cierra.
   - un **`[[service]]`** de alertas: cada N s mide los árboles por pane y, si uno pasa del umbral (por defecto 4 GB) o se mantiene por encima de X % de CPU durante Y s, avisa con `cornercase notify` (una vez por cruce, con histéresis).
   - `[download.<target>]` con binarios para Linux y macOS (x86_64 y aarch64) y `[[build]]` (`cargo build --release`) como alternativa.
-- Solo usa la API pública (`$CORNERCASE_BIN status --json` / `--panes`, `open`, `new-tab`, `focus`, `notify`). No necesita cambios en el core.
+- Solo usa la API pública (`$CORNERCASE_BIN status --json` / `--panes`, `split`, `focus`, `notify`). No necesita cambios en el core.
 - El mapeo pane↔proceso se hace por el entorno de cada proceso: `CORNERCASE_PANE=<id>` y `CORNERCASE_SERVER=<token>`, que debe ser igual al `boot` de `status --json` (así se descartan los panes de otro servidor, por ejemplo uno de desarrollo).
 
 ### Interacción
@@ -57,7 +57,7 @@ Quien trabaja con varios agentes de código en cornercase a la vez (en primer lu
 ## Requisitos no funcionales
 - Linux y macOS desde el MVP.
 - Ligero: menos del 1 % de CPU en reposo con 2 s de refresco y unos 30 panes. El transcript se lee de forma incremental (offset + `stat`), sin reparsear todo en cada tick.
-- Solo lectura sobre cornercase y Claude, salvo matar un proceso (con confirmación) y crear o enfocar su proyecto.
+- Solo lectura sobre cornercase y Claude, salvo matar un proceso (con confirmación) y abrir o enfocar su split.
 - Tolerante a cambios de formato: los campos JSON desconocidos se ignoran y los que faltan se degradan a "—"; nunca hace panic.
 - Testeable sin cornercase ni Claude reales: fixtures de `status --panes`, de árboles de procesos y de transcripts.
 
@@ -79,4 +79,4 @@ Quien trabaja con varios agentes de código en cornercase a la vez (en primer lu
 - **macOS sin máquina de pruebas**: `KERN_PROCARGS2` y `libproc` se validan solo en CI (runner macOS) y con tests sobre el propio proceso. Riesgo de bugs que solo aparezcan en uso real.
 - **Leer el entorno de procesos ajenos**: solo funciona con procesos del mismo usuario (es el caso). Un proceso que limpie su entorno (`env -i`) cae fuera del pane; se le atribuye por ascendencia (el proceso hijo hereda el pane de su padre).
 - **Estimación de tokens**: caracteres/4 es impreciso con código y JSON; escalar al total real lo corrige en conjunto, pero no por archivo.
-- **Varias instancias del proyecto "cctop"**: si el usuario lo renombra o lo cierra, la acción lo vuelve a crear; se identifica por su ruta.
+- **Varios cctop abiertos**: uno por pestaña como mucho cuando se abre desde el menú; en pestañas distintas pueden convivir varios, cada uno con su propio muestreo.

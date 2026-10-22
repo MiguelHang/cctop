@@ -3,160 +3,176 @@ use std::path::Path;
 
 use rstest::rstest;
 
-use super::{open_cctop, state_folder};
-use crate::cornercase::Client;
+use super::{clicked, open_cctop, shell_quote};
 use crate::cornercase::fake::FakeRunner;
+use crate::cornercase::{Client, Target};
 use crate::error::Error;
-use crate::test_util::TempDir;
 
-const STATE: &str = "/home/user/.local/state/cornercase/plugins/cctop";
 const EXE: &str = "/home/user/.local/share/cornercase/plugins/cctop/target/release/cctop";
-const OPEN: [&str; 3] = ["open", STATE, "--focus"];
 const STATUS: [&str; 2] = ["status", "--json"];
-const NEW_TAB: [&str; 7] = ["new-tab", "--workspace", "3", "--name", "cctop", "--", EXE];
+const SHELLS: &str = r#"{"id": 10, "program": "zsh"}, {"id": 11, "program": "zsh", "active": true}"#;
+
+type Vars = &'static [(&'static str, &'static str)];
 
 fn words(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| (*word).to_owned()).collect()
 }
 
-fn status(project: u64, path: &str, tabs: &str) -> String {
+fn status(panes: &str) -> String {
     format!(
         r#"{{"projects": [
-            {{"id": 1, "path": "/home/user/src/notes", "workspaces": [{{"id": 1, "tabs": [
-                {{"id": 1, "name": "cctop", "panes": [{{"id": 1, "program": "cctop"}}]}}
-            ]}}]}},
-            {{"id": {project}, "path": "{path}", "workspaces": [{{"id": 3, "tabs": [{tabs}]}}, {{"id": 4}}]}}
+            {{"id": 1, "workspaces": [{{"id": 1, "tabs": [{{"id": 1, "panes": [{{"id": 1, "program": "zsh"}}]}}]}}]}},
+            {{"id": 2, "active": true, "workspaces": [
+                {{"id": 3, "tabs": [{{"id": 5, "panes": [{{"id": 6}}, {{"id": 12, "program": "cctop"}}]}}, {{"id": 13}}]}},
+                {{"id": 4, "active": true, "tabs": [
+                    {{"id": 7, "panes": [{{"id": 8, "program": "zsh"}}, {{"id": 14, "program": "zsh"}}]}},
+                    {{"id": 9, "active": true, "panes": [{panes}]}}
+                ]}}
+            ]}}
         ]}}"#
     )
 }
 
-fn runner(tabs: &str) -> FakeRunner {
-    runner_with(&status(2, STATE, tabs))
+fn split(pane: u64) -> Vec<String> {
+    words(&["split", "--pane", &pane.to_string(), "--focus", "--", "exec", EXE])
 }
 
-fn runner_with(status: &str) -> FakeRunner {
-    runner_at(&OPEN, status)
-}
-
-fn runner_at(open: &[&str], status: &str) -> FakeRunner {
-    FakeRunner::default()
-        .answer(open, "2\n")
-        .answer(&STATUS, status)
-        .answer(&NEW_TAB, "9\n")
-        .answer(&["focus", "--pane", "9"], "")
-        .answer(&["focus", "--tab", "5"], "")
-}
-
-fn run(runner: FakeRunner) -> (crate::error::Result<()>, Vec<Vec<String>>) {
+fn run(clicked: Target, panes: &str) -> (crate::error::Result<()>, Vec<Vec<String>>) {
+    let runner = (1..=15).fold(FakeRunner::default().answer(&STATUS, &status(panes)), |runner, pane| {
+        let id = pane.to_string();
+        let split = ["split", "--pane", &id, "--focus", "--", "exec", EXE];
+        runner.answer(&split, "20\n").answer(&["focus", "--pane", &id], "")
+    });
     let client = Client::new(runner);
-    let result = open_cctop(&client, Path::new(STATE), Path::new(EXE));
+    let result = open_cctop(&client, clicked, Path::new(EXE));
     (result, client.runner.calls())
-}
-
-fn created() -> Vec<Vec<String>> {
-    vec![words(&OPEN), words(&STATUS), words(&NEW_TAB), words(&["focus", "--pane", "9"])]
-}
-
-fn focused() -> Vec<Vec<String>> {
-    vec![words(&OPEN), words(&STATUS), words(&["focus", "--tab", "5"])]
 }
 
 mod open_cctop {
     use super::*;
 
-    #[test]
-    fn opens_the_state_folder_and_adds_a_tab_running_this_binary_to_a_new_project() {
-        let (result, calls) = run(runner(""));
+    #[rstest]
+    #[case::the_active_pane(11)]
+    #[case::a_pane_that_is_not_active(10)]
+    fn splits_the_clicked_pane_and_runs_this_binary_in_place_of_its_shell(#[case] pane: u64) {
+        let (result, calls) = run(Target::Pane(pane), SHELLS);
         result.expect("open cctop");
-        assert_eq!(calls, created());
+        assert_eq!(calls, [words(&STATUS), split(pane)]);
     }
 
     #[rstest]
-    #[case::by_its_program(r#"{"id": 5, "name": "top", "panes": [{"id": 6, "program": "cctop"}]}"#)]
-    #[case::by_a_program_given_as_a_path(
-        r#"{"id": 5, "name": "top", "panes": [{"id": 6, "program": "/opt/bin/cctop"}]}"#
-    )]
-    #[case::by_its_name_when_no_pane_names_a_program(r#"{"id": 5, "name": "cctop", "panes": [{"id": 6}]}"#)]
-    fn focuses_the_tab_that_already_runs_cctop(#[case] tab: &str) {
-        let tabs = format!(r#"{{"id": 4, "name": "shell", "panes": [{{"id": 5, "program": "zsh"}}]}}, {tab}"#);
-        let (result, calls) = run(runner(&tabs));
+    #[case::a_tab(Target::Tab(9), 11)]
+    #[case::a_workspace_through_its_active_tab(Target::Workspace(4), 11)]
+    #[case::a_project_through_its_active_workspace(Target::Project(2), 11)]
+    #[case::a_tab_without_an_active_pane(Target::Tab(7), 8)]
+    #[case::a_workspace_without_an_active_tab(Target::Workspace(1), 1)]
+    #[case::a_project_without_an_active_workspace(Target::Project(1), 1)]
+    fn splits_the_active_or_first_pane_of_what_was_clicked(#[case] clicked: Target, #[case] pane: u64) {
+        let (result, calls) = run(clicked, SHELLS);
         result.expect("open cctop");
-        assert_eq!(calls, focused());
+        assert_eq!(calls, [words(&STATUS), split(pane)]);
     }
 
     #[rstest]
-    #[case::only_a_shell(r#"{"id": 4, "name": "shell", "panes": [{"id": 5, "program": "zsh"}]}"#)]
-    #[case::the_cctop_tab_back_at_its_shell(r#"{"id": 4, "name": "cctop", "panes": [{"id": 5, "program": "zsh"}]}"#)]
-    #[case::a_tab_without_panes(r#"{"id": 4, "name": "logs", "panes": []}"#)]
-    fn adds_the_tab_again_when_none_runs_cctop(#[case] tabs: &str) {
-        let (result, calls) = run(runner(tabs));
+    #[case::from_another_pane_of_the_tab(Target::Pane(10))]
+    #[case::from_the_tab(Target::Tab(9))]
+    #[case::from_the_project(Target::Project(2))]
+    #[case::from_the_cctop_pane_itself(Target::Pane(15))]
+    fn focuses_the_pane_of_that_tab_that_already_runs_cctop(#[case] clicked: Target) {
+        let panes = format!(r#"{SHELLS}, {{"id": 15, "program": "/opt/cctop/target/release/cctop"}}"#);
+        let (result, calls) = run(clicked, &panes);
         result.expect("open cctop");
-        assert_eq!(calls, created());
+        assert_eq!(calls, [words(&STATUS), words(&["focus", "--pane", "15"])]);
     }
 
-    #[test]
-    fn finds_the_project_by_its_path_when_the_ids_differ() {
-        let (result, calls) = run(runner_with(&status(7, STATE, "")));
+    #[rstest]
+    #[case::a_cctop_in_another_tab(SHELLS)]
+    #[case::a_pane_named_like_it_without_running_it(r#"{"id": 10, "program": "cctop-dev"}, {"id": 11}"#)]
+    #[case::panes_that_report_no_program(r#"{"id": 10}, {"id": 11, "active": true}"#)]
+    fn splits_when_no_pane_of_the_tab_runs_cctop(#[case] panes: &str) {
+        let (result, calls) = run(Target::Pane(11), panes);
         result.expect("open cctop");
-        assert_eq!(calls, created());
+        assert_eq!(calls, [words(&STATUS), split(11)]);
+    }
+
+    #[rstest]
+    #[case::a_pane_status_does_not_list(Target::Pane(99))]
+    #[case::a_tab_status_does_not_list(Target::Tab(99))]
+    #[case::a_tab_without_panes(Target::Tab(13))]
+    #[case::a_workspace_status_does_not_list(Target::Workspace(99))]
+    #[case::a_project_status_does_not_list(Target::Project(99))]
+    fn fails_without_splitting_when_there_is_no_pane_to_split(#[case] clicked: Target) {
+        let (result, calls) = run(clicked, SHELLS);
+        let error = result.expect_err("no pane");
+        assert!(matches!(error, Error::NoPane(_)), "{error}");
+        assert_eq!(calls, [words(&STATUS)]);
     }
 
     #[test]
-    fn finds_the_project_by_its_canonical_path_when_status_spells_it_differently() {
-        let temp = TempDir::new();
-        std::fs::create_dir_all(temp.path().join("x")).expect("x folder");
-        std::fs::create_dir_all(temp.path().join("state")).expect("state folder");
-        let state = temp.path().join("state");
-        let state_text = state.to_string_lossy().into_owned();
-        let spelled = temp.path().join("x/../state").to_string_lossy().into_owned();
-        let open = ["open", state_text.as_str(), "--focus"];
-        let client = Client::new(runner_at(&open, &status(7, &spelled, "")));
-        open_cctop(&client, &state, Path::new(EXE)).expect("open cctop");
-        let calls = client.runner.calls();
-        assert_eq!(calls, [words(&open), words(&STATUS), words(&NEW_TAB), words(&["focus", "--pane", "9"])]);
-    }
-
-    #[test]
-    fn fails_without_creating_anything_when_the_project_has_no_workspace() {
-        let status = format!(r#"{{"projects": [{{"id": 2, "path": "{STATE}", "workspaces": []}}]}}"#);
-        let (result, calls) = run(runner_with(&status));
-        assert!(matches!(result, Err(Error::NoWorkspace(path)) if path == Path::new(STATE)));
-        assert_eq!(calls, [words(&OPEN), words(&STATUS)]);
-    }
-
-    #[test]
-    fn fails_without_creating_anything_when_status_lacks_the_project() {
-        let (result, calls) = run(runner_with(&status(7, "/somewhere/else", "")));
-        let Err(Error::NoWorkspace(path)) = result else { panic!("expected a missing workspace error") };
-        assert_eq!(path, Path::new(STATE));
-        assert_eq!(calls, [words(&OPEN), words(&STATUS)]);
-    }
-
-    #[test]
-    fn stops_when_open_fails() {
-        let (result, calls) = run(FakeRunner::default().fail(&OPEN, "no server"));
+    fn stops_when_status_fails() {
+        let client = Client::new(FakeRunner::default().fail(&STATUS, "no server"));
+        let result = open_cctop(&client, Target::Pane(1), Path::new(EXE));
         assert!(matches!(result, Err(Error::Command { .. })));
-        assert_eq!(calls, [words(&OPEN)]);
+        assert_eq!(client.runner.calls(), [words(&STATUS)]);
+    }
+
+    #[test]
+    fn quotes_a_binary_path_the_shell_would_split() {
+        let typed = ["split", "--pane", "11", "--focus", "--", "exec", "'/home/user/My Plugins/cctop'"];
+        let client = Client::new(FakeRunner::default().answer(&STATUS, &status(SHELLS)).answer(&typed, "20\n"));
+        open_cctop(&client, Target::Pane(11), Path::new("/home/user/My Plugins/cctop")).expect("open cctop");
+        assert_eq!(client.runner.calls(), [words(&STATUS), words(&typed)]);
     }
 }
 
-mod state_folder {
+mod clicked {
+    use super::*;
+
+    const ALL: Vars = &[
+        ("CORNERCASE_PROJECT", "2"),
+        ("CORNERCASE_WORKSPACE", "4"),
+        ("CORNERCASE_TAB", "9"),
+        ("CORNERCASE_PANE", "11"),
+    ];
+
+    fn env(vars: Vars) -> impl Fn(&str) -> Option<OsString> {
+        move |key| vars.iter().find(|(name, _)| *name == key).map(|(_, value)| (*value).into())
+    }
+
+    #[rstest]
+    #[case::a_pane(ALL, Target::Pane(11))]
+    #[case::a_tab(&ALL[..3], Target::Tab(9))]
+    #[case::a_workspace(&ALL[..2], Target::Workspace(4))]
+    #[case::a_project(&ALL[..1], Target::Project(2))]
+    #[case::skipping_ids_that_are_not_numbers(
+        &[("CORNERCASE_PANE", ""), ("CORNERCASE_TAB", "nine"), ("CORNERCASE_WORKSPACE", "4")],
+        Target::Workspace(4)
+    )]
+    fn takes_the_narrowest_place_cornercase_names(#[case] vars: Vars, #[case] expected: Target) {
+        assert_eq!(clicked(env(vars)).expect("clicked"), expected);
+    }
+
+    #[rstest]
+    #[case::nothing_set(&[])]
+    #[case::only_empty_ids(&[("CORNERCASE_PANE", ""), ("CORNERCASE_PROJECT", "")])]
+    fn outside_cornercase_is_a_clear_error(#[case] vars: Vars) {
+        let error = clicked(env(vars)).expect_err("nothing clicked");
+        assert!(matches!(error, Error::NotInCornercase));
+        assert!(error.to_string().contains("CORNERCASE_PANE"), "{error}");
+        assert!(error.to_string().contains("cornercase's menu"), "{error}");
+    }
+}
+
+mod shell_quote {
     use super::*;
 
     #[rstest]
-    #[case::unset(None)]
-    #[case::empty(Some(OsString::new()))]
-    fn outside_cornercase_is_a_clear_error(#[case] var: Option<OsString>) {
-        let error = state_folder(var).expect_err("no state folder");
-        assert!(matches!(error, Error::NotInCornercase));
-        assert!(error.to_string().contains("CORNERCASE_PLUGIN_STATE"), "{error}");
-    }
-
-    #[test]
-    fn creates_the_folder_and_returns_its_canonical_path() {
-        let temp = TempDir::new();
-        let folder = state_folder(Some(temp.path().join("a/../state").into())).expect("state folder");
-        assert_eq!(folder, temp.path().join("state"));
-        assert!(folder.is_dir());
+    #[case::a_plain_path("/opt/cctop/target/release/cctop", "/opt/cctop/target/release/cctop")]
+    #[case::a_space("/a b/cctop", "'/a b/cctop'")]
+    #[case::a_single_quote("/it's/cctop", r"'/it'\''s/cctop'")]
+    #[case::shell_characters("/a$b;c/cctop", "'/a$b;c/cctop'")]
+    #[case::empty("", "''")]
+    fn keeps_the_path_one_word_for_the_shell(#[case] word: &str, #[case] quoted: &str) {
+        assert_eq!(shell_quote(word), quoted);
     }
 }

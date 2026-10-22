@@ -83,6 +83,26 @@ mod parsing {
     }
 
     #[test]
+    fn reads_which_project_workspace_tab_and_pane_are_active() {
+        let snapshot = status();
+        let project = &snapshot.projects[0];
+        let workspaces: Vec<bool> = project.workspaces.iter().map(|w| w.active).collect();
+        let tabs: Vec<bool> = project.workspaces[0].tabs.iter().map(|t| t.active).collect();
+        let panes: Vec<bool> = project.workspaces[0].tabs[0].panes.iter().map(|p| p.active).collect();
+        assert_eq!((project.active, snapshot.projects[1].active), (true, false));
+        assert_eq!((workspaces, tabs, panes), (vec![false, true], vec![true, false], vec![true, false]));
+    }
+
+    #[test]
+    fn takes_a_missing_active_as_not_active() {
+        let snapshot = Snapshot::parse(EXTRA_AND_MISSING).expect("parse");
+        let project = &snapshot.projects[0];
+        let workspace = &project.workspaces[0];
+        let (tab, pane) = (&workspace.tabs[0], &workspace.tabs[0].panes[0]);
+        assert_eq!((project.active, workspace.active, tab.active, pane.active), (false, false, false, false));
+    }
+
+    #[test]
     fn ignores_unknown_fields_and_leaves_missing_ones_empty() {
         let snapshot = Snapshot::parse(EXTRA_AND_MISSING).expect("parse");
         assert_eq!(snapshot.boot, None);
@@ -127,20 +147,11 @@ mod commands {
         assert_eq!(client.runner.calls(), [words(&["status", "--json"])]);
     }
 
-    #[rstest]
-    #[case::focused(true, &["open", "/home/user/src/notes", "--focus"])]
-    #[case::unfocused(false, &["open", "/home/user/src/notes"])]
-    fn open_passes_the_path_and_returns_the_project(#[case] focus: bool, #[case] argv: &[&str]) {
-        let client = client(argv, "1\n");
-        assert_eq!(client.open(Path::new("/home/user/src/notes"), focus).expect("open"), 1);
-        assert_eq!(client.runner.calls(), [words(argv)]);
-    }
-
     #[test]
-    fn new_tab_names_the_tab_types_the_command_after_a_separator_and_returns_its_pane() {
-        let argv = ["new-tab", "--workspace", "3", "--name", "cctop", "--", "cctop"];
+    fn split_focused_splits_the_pane_types_the_command_after_a_separator_and_returns_the_new_pane() {
+        let argv = ["split", "--pane", "3", "--focus", "--", "exec", "cctop"];
         let client = client(&argv, "8\n");
-        assert_eq!(client.new_tab(3, "cctop", &words(&["cctop"])).expect("new-tab"), 8);
+        assert_eq!(client.split_focused(3, &words(&["exec", "cctop"])).expect("split"), 8);
         assert_eq!(client.runner.calls(), [words(&argv)]);
     }
 
@@ -172,8 +183,8 @@ mod commands {
 
     #[test]
     fn an_answer_that_is_not_an_id_is_an_error() {
-        let client = client(&["open", "/x"], "project opened");
-        assert!(matches!(client.open(Path::new("/x"), false), Err(Error::Answer { .. })));
+        let client = client(&["split", "--pane", "1", "--focus", "--"], "pane opened");
+        assert!(matches!(client.split_focused(1, &[]), Err(Error::Answer { .. })));
     }
 
     #[test]

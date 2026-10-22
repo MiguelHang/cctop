@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -8,10 +6,13 @@ pub enum Error {
     Command { argv: Vec<String>, stderr: String },
     #[error("`{}` answered something unexpected: {output}", argv.join(" "))]
     Answer { argv: Vec<String>, output: String },
-    #[error("CORNERCASE_PLUGIN_STATE is not set: `cctop open` is the cctop action of cornercase's menu")]
+    #[error(
+        "none of CORNERCASE_PANE, CORNERCASE_TAB, CORNERCASE_WORKSPACE or CORNERCASE_PROJECT is set: \
+         `cctop open` is the cctop action of cornercase's menu"
+    )]
     NotInCornercase,
-    #[error("cornercase lists no cctop project with a workspace at {}", .0.display())]
-    NoWorkspace(PathBuf),
+    #[error("cornercase lists no pane to split for {0}")]
+    NoPane(String),
     #[error("that process has ended")]
     Ended,
     #[error(transparent)]

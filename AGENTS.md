@@ -44,7 +44,7 @@ By domain. Each domain is a module with its own types and tests, and knows nothi
 
 | Module | Holds | May use |
 |---|---|---|
-| `cornercase/` | The cornercase client: runs `$CORNERCASE_BIN` (`status --json`, `open`, `new-tab`, `focus`, `notify`) and parses its answers into `Snapshot` (projects, workspaces, tabs, panes, `boot`). | leaves |
+| `cornercase/` | The cornercase client: runs `$CORNERCASE_BIN` (`status --json`, `split`, `focus`, `notify`) and parses its answers into `Snapshot` (projects, workspaces, tabs, panes, `boot`). | leaves |
 | `procs/` | The `ProcessSource` trait, `linux.rs` (`/proc`) and `macos.rs` (`libproc`, `sysctl`), one `Sample` of every process of the user (pid, parent, name, arguments, memory, CPU time, `CORNERCASE_PANE`/`CORNERCASE_SERVER`), CPU % between two samples. | leaves |
 | `usage/` | Joins a `Snapshot` and a `Sample` into the tree project → workspace → tab → pane → processes, with totals per level and sorting. Pure. | `cornercase`, `procs`, leaves |
 | `context/` | Claude sessions: finding a pane's session and transcript, reading the transcript incrementally, the `Breakdown` (fixed and dynamic parts, per file and command, the real total). | leaves |
@@ -75,7 +75,7 @@ By domain. Each domain is a module with its own types and tests, and knows nothi
 
 ## Plugin
 
-- `cornercase-plugin.toml` at the root: the `cctop` action in every context (runs `cctop open`), the `watch` service, `[download.<target>]` for Linux and macOS (x86_64, aarch64) and `[[build]]` as a fallback. The cornercase rules for plugins: `design/plugins` in cornercase's repository.
+- `cornercase-plugin.toml` at the root: the `cctop` action in every context (runs `cctop open`, which opens cctop in a split), the `watch` service, `[download.<target>]` for Linux and macOS (x86_64, aarch64) and `[[build]]` as a fallback. The cornercase rules for plugins: `design/plugins` in cornercase's repository.
 - The plugin uses only cornercase's public commands. What it would need from the core (a pane's `pid` and `memory` in `status`) is noted in `design/cornercase-client.md` for a later pull request.
 
 ## Instruction files

@@ -27,7 +27,7 @@ pub fn run_watch() -> Result<()> {
 }
 
 pub fn run_open() -> Result<()> {
-    let state = cornercase::open::state_folder(std::env::var_os("CORNERCASE_PLUGIN_STATE"))?;
+    let clicked = cornercase::open::clicked(paths::system_env)?;
     let client = cornercase::Client::new(cornercase::CommandRunner::from_env());
-    cornercase::open::open_cctop(&client, &state, &std::env::current_exe()?)
+    cornercase::open::open_cctop(&client, clicked, &std::env::current_exe()?)
 }
