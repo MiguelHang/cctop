@@ -19,3 +19,4 @@ The first release: a `btop` for cornercase, as a plugin for Linux and macOS (x86
 - Commands in the breakdown show without the `cd <folder>; ` or `cd <folder> && ` Claude puts in front of them.
 - `Esc` quits, like `q`, unless the kill dialog is open, where it cancels.
 - Processes that rewrite their arguments shorter (`npm exec …`) no longer show trailing blanks, and moving the mouse over cctop without a button no longer redraws it.
+- **The tree starts folded**: cctop opens showing only the projects, with their totals, bar and sparkline; click the arrow, `Enter` or `→` to open one. New rows arrive folded too, and what you open stays open across refreshes.

@@ -61,18 +61,20 @@ mod keys {
     fn enter_toggles_the_fold_and_left_right_set_it() {
         let mut state = selected_at(1);
         press(&mut state, KeyCode::Enter);
-        assert!(state.folded.contains(&RowId::Pane(1)));
-        press(&mut state, KeyCode::Right);
-        assert!(!state.folded.contains(&RowId::Pane(1)));
+        assert!(state.unfolded.contains(&RowId::Pane(1)));
         press(&mut state, KeyCode::Left);
-        assert!(state.folded.contains(&RowId::Pane(1)));
+        assert!(!state.unfolded.contains(&RowId::Pane(1)));
+        press(&mut state, KeyCode::Right);
+        assert!(state.unfolded.contains(&RowId::Pane(1)));
+        press(&mut state, KeyCode::Enter);
+        assert!(!state.unfolded.contains(&RowId::Pane(1)));
     }
 
     #[test]
     fn enter_on_a_row_without_children_folds_nothing() {
         let mut state = selected_at(2);
         press(&mut state, KeyCode::Enter);
-        assert!(state.folded.is_empty());
+        assert!(state.unfolded.is_empty());
     }
 
     #[test]

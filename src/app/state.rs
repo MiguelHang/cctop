@@ -21,7 +21,7 @@ pub(crate) struct State {
     pub(super) sort: Option<Sort>,
     pub(super) selected: Option<RowId>,
     selected_at: usize,
-    pub(super) folded: HashSet<RowId>,
+    pub(super) unfolded: HashSet<RowId>,
     pub(super) scroll: usize,
     pub(super) page: usize,
     pub(super) context_scroll: usize,
@@ -87,14 +87,14 @@ impl State {
 
     pub(super) fn fold(&mut self, id: RowId, fold: bool) {
         if fold {
-            self.folded.insert(id);
+            self.unfolded.remove(&id);
         } else {
-            self.folded.remove(&id);
+            self.unfolded.insert(id);
         }
     }
 
     pub(super) fn toggle(&mut self, id: RowId) {
-        self.fold(id, !self.folded.contains(&id));
+        self.fold(id, self.unfolded.contains(&id));
     }
 
     pub(super) fn sort_by(&mut self, column: ui::Sort) {

@@ -21,7 +21,7 @@ use history::History;
 use input::{Flow, Lists};
 use kill::Prompt;
 use sampler::{Reading, Sampler, Tick, Update};
-use state::State;
+use state::{RowId, State};
 use terminal::{Crossterm, Events, Screen};
 use view::Line;
 
@@ -271,8 +271,17 @@ impl App {
     }
 
     fn relayout(&mut self) {
-        self.lines = view::lines(&self.tree, &self.state.folded);
+        self.lines = view::lines(&self.tree, &self.state.unfolded);
+        self.select_shown_ancestor();
         self.state.reconcile(&self.lines);
+    }
+
+    fn select_shown_ancestor(&mut self) {
+        let Some(id) = self.state.selected.filter(|_| self.state.index(&self.lines).is_none()) else { return };
+        let shown = |ancestor: &&RowId| self.lines.iter().any(|line| line.id == **ancestor);
+        if let Some(ancestor) = view::path(&self.tree, id).iter().rev().find(shown) {
+            self.state.selected = Some(*ancestor);
+        }
     }
 
     #[cfg(test)]
