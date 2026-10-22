@@ -46,6 +46,10 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 - 017 CPU en reposo: muestra de `/proc` más barata, `status` cada 10 s, dibujar solo al cambiar.
 - **Entrega**: `cornercase plugin install MiguelHang/cctop` instala el binario descargado y todo lo anterior funciona.
 
+### M6 — Tras la primera prueba del usuario (018–019)
+- 018 aspecto tipo btop (gráficas, barras, sparklines) y Context con su propia lista de agentes.
+- 019 la acción abre cctop en un split del pane y se cierra al salir, sin proyecto "cctop".
+
 ## Grafo de dependencias y oleadas paralelas
 
 ```
@@ -69,6 +73,7 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 | 5 | 011 ∥ 012 | 010 (012 también 007) |
 | 6 | 016 | todo |
 | 7 | 017 | 016 (medida) |
+| 8 | 018 ∥ 019 | 017 / 014 |
 
 Ficheros compartidos que todas tocan (fuente de conflictos al trabajar en paralelo): `Cargo.toml`
 (dependencias), `Cargo.lock`, `CHANGELOG.md`, `src/lib.rs`. 001 declara ya todos los módulos para
