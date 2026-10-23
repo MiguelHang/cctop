@@ -51,6 +51,7 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 - 019 la acción abre cctop en un split del pane y se cierra al salir, sin proyecto "cctop".
 - 020 el árbol empieza plegado.
 - 021 botón propio y cctop en un popup (cornercase ≥ 0.12.187).
+- 022 cabecera fija en las dos vistas y un Context que se entiende (grupos, palabras claras, consejo de /compact).
 
 ## Grafo de dependencias y oleadas paralelas
 
