@@ -29,6 +29,7 @@ mod procargs {
                 pane: Some(7),
                 server: Some("x-1".to_owned()),
                 claude_config_dir: Some(PathBuf::from("/home/user/.claude-work")),
+                action_of: None,
             },
         };
         assert_eq!(parse_procargs(&bytes), expected);

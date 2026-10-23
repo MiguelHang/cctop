@@ -43,6 +43,7 @@ impl MacosSource {
             pane: env.pane,
             server: env.server,
             claude_config_dir: env.claude_config_dir,
+            action_of: env.action_of,
         })
     }
 

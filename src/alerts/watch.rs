@@ -9,6 +9,8 @@ use crate::error::{Error, Result};
 use crate::procs::{ProcessSource, Sample, cpu_percent};
 use crate::usage;
 
+const PLUGIN: &str = "cctop";
+
 pub(crate) trait Clock {
     fn now(&self) -> Instant;
     fn sleep(&self, duration: Duration);
@@ -50,7 +52,8 @@ impl<R: Runner, S: ProcessSource, W: Write> Watch<R, S, W> {
     }
 
     fn tick(&mut self) -> Result<()> {
-        let sample = self.source.sample()?;
+        let mut sample = self.source.sample()?;
+        sample.processes.retain(|process| process.action_of.as_deref() != Some(PLUGIN));
         let cpu = self.previous.as_ref().map_or_else(HashMap::new, |previous| cpu_percent(previous, &sample));
         let status = self.client.status();
         let sample = self.previous.insert(sample);

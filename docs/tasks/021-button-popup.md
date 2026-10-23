@@ -1,6 +1,6 @@
 # 021 — Botón propio y cctop en un popup
 
-- **Estado**: en curso
+- **Estado**: hecho
 - **Depende de**: 019, 020; cornercase ≥ 0.12.187 (#457: botón de plugin y `placement = "popup"`)
 - **Estimación**: ~400 líneas (manifiesto, arranque, tests, docs)
 
@@ -10,7 +10,7 @@ Pedido por el usuario (2026-10-23): un botón **cctop** en la ventana de cornerc
 ## Alcance
 - Manifiesto:
   - `min_cornercase = "0.12.187"`;
-  - `[button] title = "cctop"` con un `icon` de una celda (elegir uno legible, p. ej. `▤`; documentar);
+  - `[button] title = "cctop"` con un `icon` de una celda (elegir uno legible, `◔`; documentar);
   - una acción `contexts = ["button", "project", "workspace", "tab", "pane"]`, `placement = "popup"`, sin `width`/`height` (80 % de la ventana), que ejecuta la TUI directamente (`target/release/cctop`, sin `open`);
   - se mantiene en el menú del pane una segunda acción **cctop in a split** (la de 019, `cctop open`, `placement` por defecto).
 - Al arrancar dentro del popup, cctop usa el contexto que da cornercase (`CORNERCASE_CONTEXT`, `CORNERCASE_PANE`/`_TAB`/`_WORKSPACE`/`_PROJECT`): selecciona esa fila y despliega solo la ruta hasta ella (el resto sigue plegado, 020), y si tiene un Claude, ese es el agente marcado al entrar en Context. Sin esas variables, como hoy.

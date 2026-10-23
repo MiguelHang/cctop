@@ -6,6 +6,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use rstest::rstest;
 
 use super::context::{Found, PaneContext};
 use super::sampler::{Reading, Sampler, Update};
@@ -99,10 +100,14 @@ pub(super) fn index_of(app: &App, id: RowId) -> usize {
     app.lines.iter().position(|line| line.id == id).expect("the row is visible")
 }
 
-pub(super) fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
+fn drawn(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
     terminal.draw(|frame| app.draw(frame)).expect("draw");
-    terminal.backend().buffer().clone()
+    terminal
+}
+
+pub(super) fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
+    drawn(app, width, height).backend().buffer().clone()
 }
 
 pub(super) fn click(column: u16, row: u16) -> Event {
@@ -297,9 +302,7 @@ mod starting_folded {
     fn the_first_draw_shows_only_the_projects() {
         let mut app = folded_app(first_sample(Instant::now()));
         assert_eq!(labels(&app), ["notes", "shop"]);
-        let mut terminal = Terminal::new(TestBackend::new(80, 20)).expect("test terminal");
-        terminal.draw(|frame| app.draw(frame)).expect("draw");
-        insta::assert_snapshot!(terminal.backend());
+        insta::assert_snapshot!(drawn(&mut app, 80, 20).backend());
     }
 
     #[test]
@@ -364,6 +367,66 @@ mod starting_folded {
         app.state.select(&app.lines, notes);
         app.handle(&key(KeyCode::Tab), Instant::now());
         assert_eq!(app.state.agent, Some(1));
+    }
+}
+
+mod starting_at_the_launch_place {
+    use super::*;
+
+    fn started_at(id: RowId) -> App {
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.start = Some(id);
+        app.update(Update::Reading(Ok(reading(first_sample(Instant::now())))), Instant::now());
+        app
+    }
+
+    #[test]
+    fn a_pane_is_selected_with_only_its_path_unfolded_on_the_first_draw() {
+        let mut app = started_at(RowId::Pane(7));
+        assert_eq!(labels(&app), ["notes", "main", "feature-x (worktree)", "claude", "%7 claude", "shop"]);
+        assert_eq!(app.state.selected, Some(RowId::Pane(7)));
+        assert_eq!(app.view().rows[index_of(&app, RowId::Pane(7))].folded, Some(true));
+        insta::assert_snapshot!(drawn(&mut app, 80, 20).backend());
+    }
+
+    #[test]
+    fn the_pane_s_claude_is_the_agent_marked_in_context() {
+        let mut app = started_at(RowId::Pane(7));
+        app.handle(&key(KeyCode::Tab), Instant::now());
+        assert_eq!(app.state.agent, Some(7));
+    }
+
+    #[test]
+    fn a_tab_is_selected_folded_under_its_open_project_and_workspace() {
+        let app = started_at(RowId::Tab(4));
+        assert_eq!(labels(&app), ["notes", "shop", "main", "shell"]);
+        assert_eq!(app.state.selected, Some(RowId::Tab(4)));
+    }
+
+    #[test]
+    fn a_place_the_tree_does_not_hold_leaves_it_folded_with_nothing_selected() {
+        let app = started_at(RowId::Pane(99));
+        assert_eq!(labels(&app), ["notes", "shop"]);
+        assert_eq!(app.state.selected, None);
+    }
+
+    #[test]
+    fn the_place_waits_for_the_first_good_reading() {
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        app.start = Some(RowId::Tab(4));
+        app.update(Update::Reading(Err("cornercase: down".to_owned())), Instant::now());
+        app.update(Update::Reading(Ok(reading(first_sample(Instant::now())))), Instant::now());
+        assert_eq!(app.state.selected, Some(RowId::Tab(4)));
+    }
+
+    #[test]
+    fn a_later_reading_leaves_what_the_user_folded() {
+        let now = Instant::now();
+        let mut app = started_at(RowId::Pane(7));
+        app.state.fold(RowId::Project(1), true);
+        app.relayout();
+        app.update(Update::Reading(Ok(reading(second_sample(now)))), now);
+        assert_eq!(labels(&app), ["notes", "shop"]);
     }
 }
 
@@ -684,6 +747,17 @@ mod event_loop {
         let script = [None, moved.clone(), moved, None, Some(key(KeyCode::Char('q')))];
         run_loop(&mut terminal, &mut app, &mut Scripted(VecDeque::from(script)), &updates).expect("the loop ends");
         assert_eq!(terminal.get_frame().count(), 1);
+    }
+
+    #[rstest]
+    #[case::q(KeyCode::Char('q'))]
+    #[case::esc(KeyCode::Esc)]
+    fn quitting_ends_the_loop_without_an_error(#[case] code: KeyCode) {
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("test terminal");
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        let (_send, updates) = mpsc::channel();
+        let mut events = Scripted(VecDeque::from([Some(key(code))]));
+        assert!(run_loop(&mut terminal, &mut app, &mut events, &updates).is_ok());
     }
 
     #[test]

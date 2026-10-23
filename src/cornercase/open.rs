@@ -6,6 +6,7 @@ use super::{Client, Runner, Snapshot, Target};
 use crate::error::{Error, Result};
 
 const CCTOP: &str = "cctop";
+const CONTEXT: &str = "CORNERCASE_CONTEXT";
 
 type Place = fn(u64) -> Target;
 
@@ -21,6 +22,11 @@ pub(crate) fn clicked(env: impl Fn(&str) -> Option<OsString>) -> Result<Target> 
         .into_iter()
         .find_map(|(key, target)| env(key).and_then(|id| id.to_str()?.trim().parse().ok()).map(target))
         .ok_or(Error::NotInCornercase)
+}
+
+pub(crate) fn launched(env: impl Fn(&str) -> Option<OsString>) -> Option<Target> {
+    env(CONTEXT).filter(|context| !context.is_empty())?;
+    clicked(env).ok()
 }
 
 pub(crate) fn open_cctop<R: Runner>(client: &Client<R>, clicked: Target, exe: &Path) -> Result<()> {

@@ -35,6 +35,7 @@ pub(crate) struct Sampler<R, S, C = Sessions> {
     pane: Option<u64>,
     last: Option<Reading>,
     asked: Option<Asked>,
+    hidden: Option<Pid>,
 }
 
 struct Asked {
@@ -66,20 +67,27 @@ fn sample_panes(sample: &Sample, boot: Option<&str>) -> HashSet<u64> {
 impl<R, S> Sampler<R, S> {
     pub(super) fn new(client: Client<R>, source: S) -> Self {
         let contexts = Sessions::default();
-        Self { client, source, previous: None, contexts, home: None, pane: None, last: None, asked: None }
+        Self { client, source, previous: None, contexts, home: None, pane: None, last: None, asked: None, hidden: None }
     }
 }
 
 impl<R, S, C> Sampler<R, S, C> {
     pub(super) fn with_contexts<D>(self, contexts: D, home: Option<OsString>) -> Sampler<R, S, D> {
-        let Self { client, source, previous, pane, last, asked, .. } = self;
-        Sampler { client, source, previous, contexts, home, pane, last, asked }
+        let Self { client, source, previous, pane, last, asked, hidden, .. } = self;
+        Sampler { client, source, previous, contexts, home, pane, last, asked, hidden }
+    }
+
+    pub(super) fn hiding_group(self, group: Option<Pid>) -> Self {
+        Self { hidden: group, ..self }
     }
 }
 
 impl<R: Runner, S: ProcessSource, C: Contexts> Sampler<R, S, C> {
     pub(super) fn tick(&mut self) -> Tick {
-        let sample = self.source.sample().map_err(|error| format!("cannot read the processes: {error}"))?;
+        let mut sample = self.source.sample().map_err(|error| format!("cannot read the processes: {error}"))?;
+        if let Some(group) = self.hidden {
+            sample.processes.retain(|process| process.pgid != group);
+        }
         let cpu = self.previous.as_ref().map(|previous| cpu_percent(previous, &sample)).unwrap_or_default();
         self.previous = Some(sample.clone());
         let snapshot = self.status(&sample)?;

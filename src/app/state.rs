@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use super::view::Line;
 use crate::config;
+use crate::cornercase::Target;
 use crate::procs::Pid;
 use crate::ui::{self, ViewTab};
 use crate::usage::Sort;
@@ -13,6 +14,17 @@ pub(crate) enum RowId {
     Tab(u64),
     Pane(u64),
     Process { pane: u64, pid: Pid },
+}
+
+impl From<Target> for RowId {
+    fn from(target: Target) -> Self {
+        match target {
+            Target::Project(id) => Self::Project(id),
+            Target::Workspace(id) => Self::Workspace(id),
+            Target::Tab(id) => Self::Tab(id),
+            Target::Pane(id) => Self::Pane(id),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

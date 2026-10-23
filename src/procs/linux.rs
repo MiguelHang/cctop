@@ -71,6 +71,7 @@ impl LinuxSource {
             pane: launch.env.pane,
             server: launch.env.server.clone(),
             claude_config_dir: launch.env.claude_config_dir.clone(),
+            action_of: launch.env.action_of.clone(),
         };
         Some((process, launch))
     }
