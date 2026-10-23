@@ -19,6 +19,43 @@ pub(crate) struct Part {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Estimate(pub(crate) u64);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum Group {
+    Commands,
+    Files,
+    Searches,
+    Replies,
+    Prompts,
+    Subagents,
+    OtherTools,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Grouped {
+    pub(crate) group: Group,
+    pub(crate) tokens: u64,
+    pub(crate) parts: Vec<Part>,
+}
+
+impl Breakdown {
+    pub(crate) fn groups(&self) -> Vec<Grouped> {
+        let mut groups: Vec<Grouped> = Vec::new();
+        for part in &self.dynamic {
+            let Some(group) = part.kind.group() else { continue };
+            match groups.iter_mut().find(|grouped| grouped.group == group) {
+                Some(grouped) => grouped.parts.push(part.clone()),
+                None => groups.push(Grouped { group, tokens: 0, parts: vec![part.clone()] }),
+            }
+        }
+        for grouped in &mut groups {
+            grouped.tokens = grouped.parts.iter().map(|part| part.tokens.0).sum();
+            grouped.parts.sort_by(|a, b| b.tokens.0.cmp(&a.tokens.0).then_with(|| a.kind.cmp(&b.kind)));
+        }
+        groups.sort_by(|a, b| b.tokens.cmp(&a.tokens).then_with(|| a.group.cmp(&b.group)));
+        groups
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum PartKind {
     SystemPrompt,
@@ -34,6 +71,21 @@ pub(crate) enum PartKind {
     Replies,
     Subagents,
     OtherTools,
+}
+
+impl PartKind {
+    pub(crate) fn group(&self) -> Option<Group> {
+        match self {
+            Self::File(_) => Some(Group::Files),
+            Self::Command(_) => Some(Group::Commands),
+            Self::Search(_) => Some(Group::Searches),
+            Self::Prompts => Some(Group::Prompts),
+            Self::Replies => Some(Group::Replies),
+            Self::Subagents => Some(Group::Subagents),
+            Self::OtherTools => Some(Group::OtherTools),
+            Self::SystemPrompt | Self::Instructions(_) | Self::Skills | Self::Tools | Self::Mcp | Self::Agents => None,
+        }
+    }
 }
 
 impl From<Tool> for PartKind {

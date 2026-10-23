@@ -22,6 +22,10 @@ pub(super) fn heat(fraction: f64, warm: f64, hot: f64) -> Color {
     }
 }
 
+pub(super) fn fill_level(percent: f64) -> Color {
+    heat(percent / 100.0, 0.5, 0.8)
+}
+
 pub(super) fn resample<T: Copy + Into<Option<f64>>>(points: &[T], slots: usize, capacity: usize) -> Vec<Option<f64>> {
     let capacity = capacity.max(1);
     let newest: Vec<Option<f64>> = points.iter().rev().take(capacity).map(|point| (*point).into()).collect();

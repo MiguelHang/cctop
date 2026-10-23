@@ -4,6 +4,7 @@ use ratatui::crossterm::event::{
 
 use super::state::State;
 use super::view::Line;
+use crate::context::breakdown::Group;
 use crate::ui::{Hit, Hits, ViewTab};
 
 const WHEEL: isize = 3;
@@ -18,6 +19,7 @@ pub(crate) enum Flow {
 pub(crate) struct Lists<'a> {
     pub(super) lines: &'a [Line],
     pub(super) agents: &'a [u64],
+    pub(super) groups: &'a [(Group, Option<bool>)],
 }
 
 pub(super) fn handle(state: &mut State, lists: &Lists<'_>, hits: &Hits, event: &Event) -> Flow {
@@ -37,6 +39,7 @@ fn key_press(state: &mut State, lists: &Lists<'_>, key: KeyEvent) -> Flow {
         _ if state.tab == ViewTab::Processes => list_key(state, lists.lines, key.code),
         KeyCode::Up => state.step_agent(lists.agents, -1),
         KeyCode::Down => state.step_agent(lists.agents, 1),
+        KeyCode::Enter => state.toggle_groups(lists.groups),
         _ => {}
     }
     Flow::Continue
@@ -70,7 +73,7 @@ fn fold_selected(state: &mut State, lines: &[Line], fold: Option<bool>) {
 
 fn mouse(state: &mut State, lists: &Lists<'_>, hits: &Hits, mouse: MouseEvent) -> Flow {
     if state.tab != ViewTab::Processes {
-        context_mouse(state, lists.agents, hits, mouse);
+        context_mouse(state, lists, hits, mouse);
         return Flow::Continue;
     }
     let lines = lists.lines;
@@ -90,14 +93,15 @@ fn right_click(state: &mut State, lines: &[Line], hit: Option<Hit>) -> Flow {
     Flow::Kill
 }
 
-fn context_mouse(state: &mut State, agents: &[u64], hits: &Hits, mouse: MouseEvent) {
+fn context_mouse(state: &mut State, lists: &Lists<'_>, hits: &Hits, mouse: MouseEvent) {
     match (mouse.kind, hits.at(mouse.column, mouse.row)) {
         (MouseEventKind::Down(MouseButton::Left), Some(Hit::Tab(tab))) => state.tab = tab,
         (MouseEventKind::Down(MouseButton::Left), Some(Hit::Agent(index))) => {
-            if let Some(&pane) = agents.get(index) {
+            if let Some(&pane) = lists.agents.get(index) {
                 state.agent = Some(pane);
             }
         }
+        (MouseEventKind::Down(MouseButton::Left), Some(Hit::Group(index))) => state.toggle_group(lists.groups, index),
         (MouseEventKind::ScrollDown, _) => state.context_scroll = state.context_scroll.saturating_add_signed(WHEEL),
         (MouseEventKind::ScrollUp, _) => state.context_scroll = state.context_scroll.saturating_add_signed(-WHEEL),
         _ => {}
@@ -114,7 +118,7 @@ fn click(state: &mut State, lines: &[Line], hit: Option<Hit>) {
                 state.toggle(line.id);
             }
         }
-        Some(Hit::Button(_) | Hit::Agent(_)) | None => {}
+        Some(Hit::Button(_) | Hit::Agent(_) | Hit::Group(_)) | None => {}
     }
 }
 

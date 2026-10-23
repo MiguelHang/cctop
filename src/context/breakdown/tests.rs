@@ -1,7 +1,7 @@
 use rstest::rstest;
 
 use super::super::record::parse;
-use super::{Accumulator, Breakdown, Estimate, Part, PartKind, scale};
+use super::{Accumulator, Breakdown, Estimate, Group, Grouped, Part, PartKind, scale};
 use crate::test_util::fixture;
 
 const SESSION: &str = fixture!("claude/2.1.306/session.jsonl");
@@ -275,5 +275,63 @@ mod incremental {
             feed(&mut accumulator, &lines[cut..].join("\n"));
             assert_eq!(accumulator.breakdown(), whole, "cut at line {cut}");
         }
+    }
+}
+
+mod groups {
+    use super::*;
+
+    fn part(kind: PartKind, tokens: u64) -> Part {
+        Part { kind, tokens: Estimate(tokens) }
+    }
+
+    fn command(text: &str) -> PartKind {
+        PartKind::Command(text.to_owned())
+    }
+
+    #[test]
+    fn join_the_parts_of_a_kind_from_the_largest_group_down() {
+        let breakdown = Breakdown {
+            total: None,
+            fixed: vec![part(PartKind::SystemPrompt, 900)],
+            dynamic: vec![
+                part(file("src/cart.rs"), 300),
+                part(command("cargo test"), 200),
+                part(PartKind::Replies, 150),
+                part(command("git diff"), 250),
+            ],
+        };
+        let expected = vec![
+            Grouped {
+                group: Group::Commands,
+                tokens: 450,
+                parts: vec![part(command("git diff"), 250), part(command("cargo test"), 200)],
+            },
+            Grouped { group: Group::Files, tokens: 300, parts: vec![part(file("src/cart.rs"), 300)] },
+            Grouped { group: Group::Replies, tokens: 150, parts: vec![part(PartKind::Replies, 150)] },
+        ];
+        assert_eq!(breakdown.groups(), expected);
+    }
+
+    #[rstest]
+    #[case::file(file("a"), Some(Group::Files))]
+    #[case::search(PartKind::Search("fn".to_owned()), Some(Group::Searches))]
+    #[case::prompts(PartKind::Prompts, Some(Group::Prompts))]
+    #[case::subagents(PartKind::Subagents, Some(Group::Subagents))]
+    #[case::other_tools(PartKind::OtherTools, Some(Group::OtherTools))]
+    #[case::instructions(PartKind::Instructions("CLAUDE.md".to_owned()), None)]
+    #[case::skills(PartKind::Skills, None)]
+    fn each_dynamic_kind_has_its_group_and_the_fixed_part_none(
+        #[case] kind: PartKind,
+        #[case] expected: Option<Group>,
+    ) {
+        assert_eq!(kind.group(), expected);
+    }
+
+    #[test]
+    fn the_fixture_s_groups_add_up_to_the_dynamic_part() {
+        let breakdown = breakdown_of(SESSION);
+        let grouped: u64 = breakdown.groups().iter().map(|grouped| grouped.tokens).sum();
+        assert_eq!(grouped, sum(&breakdown.dynamic));
     }
 }

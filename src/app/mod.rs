@@ -17,6 +17,7 @@ use ratatui::crossterm::event::{Event, MouseButton, MouseEventKind};
 use ratatui::{Frame, Terminal};
 
 use agents::Agent;
+use context::{Found, PaneContext};
 use history::History;
 use input::{Flow, Lists};
 use kill::Prompt;
@@ -27,6 +28,7 @@ use view::Line;
 
 use crate::config::{self, Config, Loaded};
 use crate::context::Sessions;
+use crate::context::breakdown::Group;
 use crate::cornercase::{self, Client, CommandRunner};
 use crate::error::Result;
 use crate::paths;
@@ -203,7 +205,8 @@ impl App {
         }
         let (sort, tab) = (self.state.sort, self.state.tab);
         let double = tab == ViewTab::Processes && self.double_click(event, now);
-        let lists = Lists { lines: &self.lines, agents: &self.agent_panes };
+        let groups = if tab == ViewTab::Context { self.context_groups() } else { Vec::new() };
+        let lists = Lists { lines: &self.lines, agents: &self.agent_panes, groups: &groups };
         let flow = input::handle(&mut self.state, &lists, &self.hits, event);
         if matches!(event, Event::Key(_) | Event::Mouse(_)) {
             self.notice = None;
@@ -256,8 +259,19 @@ impl App {
         }
         self.asked = pane;
         self.state.context_scroll = 0;
+        self.state.folds.clear();
         if let Some(panes) = &self.panes {
             let _ = panes.send(pane);
+        }
+    }
+
+    fn context_groups(&self) -> Vec<(Group, Option<bool>)> {
+        let pane = self.context_pane();
+        match self.reading.as_ref().and_then(|reading| reading.context.as_ref()) {
+            Some(PaneContext { pane: read, found: Found::Session(_, breakdown) }) if Some(*read) == pane => {
+                context::states(&breakdown.groups(), &self.state.folds)
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -265,14 +279,17 @@ impl App {
         let pane = self.context_pane();
         let marked = self.agents.iter().position(|agent| Some(agent.pane) == pane);
         let agent = marked.and_then(|at| self.agents.get(at));
-        let node = agent.and_then(|agent| Some((context::pane_node(&self.tree, agent.pane)?, agent.label.as_str())));
+        let node = agent.and_then(|agent| Some((context::pane_node(&self.tree, agent.pane)?, agent)));
+        let title = node.map(|(pane, agent)| agents::title(agent, pane)).unwrap_or_default();
+        let node = node.map(|(pane, agent)| (pane, agent.label.as_str()));
         let found = self.reading.as_ref().and_then(|reading| reading.context.as_ref());
         let agents = self
             .agents
             .iter()
             .map(|agent| AgentRow { label: agent.label.clone(), percent: agent.percent.map(f64::from) })
             .collect();
-        ContextView { agents, marked, detail: context::view(node, found, self.state.context_scroll) }
+        let detail = context::view(node, found, self.state.context_scroll, &self.state.folds);
+        ContextView { agents, marked, title, detail }
     }
 
     fn rebuild(&mut self) {

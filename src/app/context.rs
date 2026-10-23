@@ -5,16 +5,20 @@ use std::path::Path;
 #[cfg(test)]
 pub(super) mod fake;
 
-use crate::context::breakdown::{Breakdown, Part, PartKind};
+use crate::context::breakdown::{Breakdown, Group, Grouped, Part, PartKind};
 use crate::context::{Claude, Sessions, session};
 use crate::cornercase::Snapshot;
 use crate::procs::{Pid, Process, Sample};
-use crate::ui::{ContextDetail, ContextPart, ContextPercent, ContextSession};
+use crate::ui::{ContextDetail, ContextGroup, ContextPart, ContextPercent, ContextSession};
 use crate::usage::{self, PaneNode, Tree};
 
 const CLAUDE: &str = "claude";
 const RUNTIMES: [&str; 2] = ["node", "bun"];
 const WINDOWS: [u64; 2] = [200_000, 1_000_000];
+const TOP: usize = 3;
+const OPEN_AT_START: usize = 2;
+
+pub(super) type Folds = HashMap<Group, bool>;
 
 pub(crate) trait Contexts {
     fn read(&mut self, claudes: &[Claude]) -> HashMap<Pid, Breakdown>;
@@ -87,7 +91,12 @@ pub(super) fn pane_node(tree: &Tree, id: u64) -> Option<&PaneNode> {
     tabs.flat_map(|tab| &tab.panes).find(|pane| pane.id == id)
 }
 
-pub(super) fn view(pane: Option<(&PaneNode, &str)>, context: Option<&PaneContext>, scroll: usize) -> ContextDetail {
+pub(super) fn view(
+    pane: Option<(&PaneNode, &str)>,
+    context: Option<&PaneContext>,
+    scroll: usize,
+    folds: &Folds,
+) -> ContextDetail {
     let Some((pane, label)) = pane else { return ContextDetail::NoAgent };
     let label = label.to_owned();
     match context.filter(|context| context.pane == pane.id).map(|context| &context.found) {
@@ -96,16 +105,60 @@ pub(super) fn view(pane: Option<(&PaneNode, &str)>, context: Option<&PaneContext
         Some(&Found::NoSession(pid)) => ContextDetail::NoSession { pane: label, pid },
         Some(Found::Session(_, breakdown)) => {
             let root = pane.path.as_deref();
+            let grouped = breakdown.groups();
+            let open = states(&grouped, folds);
             ContextDetail::Session(ContextSession {
-                pane: label,
                 total: breakdown.total,
                 percent: breakdown.total.zip(pane.context_percent).and_then(|(total, shown)| percent(total, shown)),
-                fixed: parts(&breakdown.fixed, root),
-                dynamic: parts(&breakdown.dynamic, root),
+                loaded: loaded(&breakdown.fixed, root),
+                groups: grouped.iter().zip(open).map(|(grouped, (_, open))| group(grouped, open, root)).collect(),
                 scroll,
             })
         }
     }
+}
+
+pub(super) fn states(groups: &[Grouped], folds: &Folds) -> Vec<(Group, Option<bool>)> {
+    let mut rank = 0;
+    let mut state = |grouped: &Grouped| {
+        let open = folds.get(&grouped.group).copied().unwrap_or(rank < OPEN_AT_START);
+        rank += 1;
+        open
+    };
+    groups.iter().map(|grouped| (grouped.group, itemized(grouped.group).then(|| state(grouped)))).collect()
+}
+
+fn itemized(group: Group) -> bool {
+    matches!(group, Group::Commands | Group::Files | Group::Searches)
+}
+
+fn group(grouped: &Grouped, open: Option<bool>, root: Option<&Path>) -> ContextGroup {
+    let (name, noun) = match grouped.group {
+        Group::Commands => ("Commands", "command"),
+        Group::Files => ("Files", "file"),
+        Group::Searches => ("Searches", "search"),
+        Group::Replies => ("Claude's replies", ""),
+        Group::Prompts => ("Your messages", ""),
+        Group::Subagents => ("Subagent results", ""),
+        Group::OtherTools => ("Other tools", ""),
+    };
+    let (top, rest) =
+        if open.is_some() { grouped.parts.split_at(grouped.parts.len().min(TOP)) } else { (&[][..], &[][..]) };
+    ContextGroup {
+        name: name.to_owned(),
+        noun: noun.to_owned(),
+        tokens: grouped.tokens,
+        items: parts(top, root),
+        more: rest.len(),
+        more_tokens: rest.iter().map(|part| part.tokens.0).sum(),
+        open: open.unwrap_or(false),
+    }
+}
+
+fn loaded(fixed: &[Part], root: Option<&Path>) -> Vec<ContextPart> {
+    let mut loaded = parts(fixed, root);
+    loaded.sort_by_key(|part| std::cmp::Reverse(part.tokens));
+    loaded
 }
 
 #[expect(clippy::cast_precision_loss, reason = "a percentage is shown with one decimal at most")]
@@ -115,7 +168,7 @@ fn percent(total: u64, cornercase: u16) -> Option<ContextPercent> {
     let distance = |window: u64| (used(window) - shown).abs();
     let window =
         WINDOWS.into_iter().filter(|window| *window >= total).min_by(|a, b| distance(*a).total_cmp(&distance(*b)))?;
-    Some(ContextPercent { used: used(window), window, cornercase: shown })
+    Some(ContextPercent { used: used(window), window })
 }
 
 fn parts(parts: &[Part], root: Option<&Path>) -> Vec<ContextPart> {
@@ -131,8 +184,7 @@ fn parts(parts: &[Part], root: Option<&Path>) -> Vec<ContextPart> {
 fn label(kind: &PartKind, root: Option<&Path>) -> (String, bool) {
     let text = match kind {
         PartKind::Instructions(path) | PartKind::File(path) => return (relative(path, root), true),
-        PartKind::Command(command) => return (format!("$ {}", one_line(command)), false),
-        PartKind::Search(pattern) => return (format!("search {}", one_line(pattern)), false),
+        PartKind::Command(text) | PartKind::Search(text) => return (one_line(text), false),
         PartKind::SystemPrompt => "System prompt",
         PartKind::Skills => "Skills",
         PartKind::Tools => "Deferred tools",

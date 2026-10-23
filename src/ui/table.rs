@@ -2,12 +2,12 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
-use super::chart::{bar, heat, resample, sparkline};
+use super::chart::{bar, fill_level, heat, resample, sparkline};
 use super::hits::{Hit, Hits};
 use super::panel::{self, Label};
 use super::text::{Align, put};
 use super::view::{Row, RowKind, Sort, View, ViewTab};
-use super::{draw_tabs, summary};
+use super::{draw_tabs, keys, summary};
 use crate::format;
 
 const GAP: u16 = 1;
@@ -49,7 +49,7 @@ pub(super) fn draw(buffer: &mut Buffer, area: Rect, view: &View, totals: bool, h
     let top = panel::top(area);
     let from = draw_tabs(buffer, top, ViewTab::Processes, hits);
     panel::right(buffer, top, from, &summary(view, panel::room(top, from), totals));
-    panel::left(buffer, panel::bottom(area), &[Label::new(help(area.width), Style::new())], hits);
+    panel::left(buffer, panel::bottom(area), &[Label::new(keys(area.width, &HELP), Style::new())], hits);
     if inner.height == 0 {
         return;
     }
@@ -63,19 +63,6 @@ pub(super) fn draw(buffer: &mut Buffer, area: Rect, view: &View, totals: bool, h
         draw_row(buffer, &line, row, view);
         push_row_hits(hits, &line, row);
     }
-}
-
-fn help(width: u16) -> String {
-    let room = usize::from(width.saturating_sub(6));
-    let mut shown = String::new();
-    for item in HELP {
-        let next = if shown.is_empty() { item.to_owned() } else { format!("{shown}  {item}") };
-        if next.chars().count() > room {
-            break;
-        }
-        shown = next;
-    }
-    shown
 }
 
 fn columns(area: Rect) -> Vec<(Column, Rect)> {
@@ -157,6 +144,7 @@ fn draw_row(buffer: &mut Buffer, line: &Line<'_>, row: &Row, view: &View) {
             Column::Name => put(buffer, rect, &name(row, !context_shown), Align::Left, Style::new()),
             Column::Bar => memory_bar(buffer, rect, row, view),
             Column::Spark => cpu_sparkline(buffer, rect, row, view.graphs.row_points),
+            Column::Context => put(buffer, rect, &cell(row, column), Align::Right, context_style(row)),
             _ => put(buffer, rect, &cell(row, column), align(column), Style::new()),
         }
     }
@@ -167,6 +155,13 @@ fn memory_bar(buffer: &mut Buffer, area: Rect, row: &Row, view: &View) {
     let (Some(memory), Some(total)) = (row.memory, view.header.memory.filter(|total| *total > 0)) else { return };
     let threshold = view.memory_threshold.max(1) as f64;
     bar(buffer, area, memory as f64 / total as f64, heat(memory as f64 / threshold, 0.5, 1.0));
+}
+
+fn context_style(row: &Row) -> Style {
+    match row.context.filter(|_| row.kind == RowKind::Pane) {
+        Some(percent) => Style::new().fg(fill_level(percent)),
+        None => Style::new(),
+    }
 }
 
 fn cpu_sparkline(buffer: &mut Buffer, area: Rect, row: &Row, points: usize) {

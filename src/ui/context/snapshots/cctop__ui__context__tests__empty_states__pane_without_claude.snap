@@ -1,10 +1,12 @@
 ---
 source: src/ui/context/tests.rs
-expression: "draw(detail, 100, 6).backend()"
+expression: "draw(detail, 100, 8).backend()"
 ---
-"╭─ Processes ─ Context ─────────╮╭─ shopfront › search-bar › %149 ─────────────────────────────────╮"
-"│▶ search-bar › %149         30%││shopfront › search-bar › %149 runs no claude process.            │"
-"│  main › %155               11%││                                                                 │"
-"│  cctop › main › %233         —││                                                                 │"
+"╭─ Processes ─ Context ─────────╮╭─ what fills this conversation ──────────────────────────────────╮"
+"│  shop › search-bar         85%││shop › checkout runs no claude process.                          │"
+"│▶ shop › checkout           20%││                                                                 │"
+"│  notes › main              60%││                                                                 │"
+"│  notes › drafts              —││                                                                 │"
 "│                               ││                                                                 │"
-"╰─ ↑↓ choose ───────────────────╯╰─────────────────────────────────────────────────────────────────╯"
+"│sorted by context used         ││                                                                 │"
+"╰─ ↑↓ choose agent ─────────────╯╰─ Tab view  q/Esc close ─────────────────────────────────────────╯"

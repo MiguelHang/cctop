@@ -11,6 +11,7 @@ pub(crate) enum Hit {
     Fold(usize),
     Button(Button),
     Agent(usize),
+    Group(usize),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

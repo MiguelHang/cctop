@@ -17,8 +17,8 @@ pub(crate) use context::scroll_max as context_scroll_max;
 pub(crate) use dialog::{Button, Dialog};
 pub(crate) use hits::{Hit, Hits};
 pub(crate) use view::{
-    AgentRow, ContextDetail, ContextPart, ContextPercent, ContextSession, ContextView, Graphs, Header, Row, RowKind,
-    Sort, View, ViewTab,
+    AgentRow, ContextDetail, ContextGroup, ContextPart, ContextPercent, ContextSession, ContextView, Graphs, Header,
+    Row, RowKind, Sort, View, ViewTab,
 };
 
 use panel::Label;
@@ -36,16 +36,20 @@ pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
     if area.is_empty() {
         return hits;
     }
+    let (band, below) = split(area);
     match view.tab {
         ViewTab::Processes => {
-            let graphs = graphs::height(area);
-            if graphs > 0 {
-                graphs::draw(buffer, Rect { height: graphs, ..area }, view);
+            if !band.is_empty() {
+                graphs::draw(buffer, band, view);
             }
-            let table = Rect { y: area.y + graphs, height: area.height - graphs, ..area };
-            table::draw(buffer, table, view, graphs == 0, &mut hits);
+            table::draw(buffer, below, view, band.is_empty(), &mut hits);
         }
-        ViewTab::Context => context::draw(buffer, area, view, &mut hits),
+        ViewTab::Context => {
+            if !band.is_empty() {
+                context::draw_band(buffer, band, view);
+            }
+            context::draw(buffer, below, view, band.is_empty(), &mut hits);
+        }
     }
     if let Some(dialog) = &view.dialog {
         hits = dialog::draw(buffer, area, dialog);
@@ -55,6 +59,24 @@ pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
 
 pub(crate) fn list_height(area: Rect) -> usize {
     usize::from(area.height.saturating_sub(graphs::height(area)).saturating_sub(3))
+}
+
+fn split(area: Rect) -> (Rect, Rect) {
+    let band = graphs::height(area);
+    (Rect { height: band, ..area }, Rect { y: area.y + band, height: area.height - band, ..area })
+}
+
+fn keys(width: u16, items: &[&str]) -> String {
+    let room = usize::from(width.saturating_sub(6));
+    let mut shown = String::new();
+    for item in items {
+        let next = if shown.is_empty() { (*item).to_owned() } else { format!("{shown}  {item}") };
+        if next.chars().count() > room {
+            break;
+        }
+        shown = next;
+    }
+    shown
 }
 
 fn draw_tabs(buffer: &mut Buffer, line: Rect, active: ViewTab, hits: &mut Hits) -> u16 {

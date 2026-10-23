@@ -8,22 +8,22 @@ use ratatui::backend::TestBackend;
 use rstest::rstest;
 
 use super::fake::Counting;
-use super::{Contexts, Found, PaneContext, Source, is_claude, pane_node, percent, read, view};
+use super::{Contexts, Folds, Found, PaneContext, Source, is_claude, pane_node, percent, read, states, view};
 use crate::context::Sessions;
-use crate::context::breakdown::{Accumulator, Breakdown, Estimate, Part, PartKind};
+use crate::context::breakdown::{Accumulator, Breakdown, Estimate, Group, Part, PartKind};
 use crate::context::fake::start;
 use crate::context::record::parse;
 use crate::cornercase::Snapshot;
 use crate::procs::{Pid, Process, Sample};
 use crate::test_util::{TempDir, fixture};
-use crate::ui::{self, AgentRow, ContextDetail, ContextPercent, ContextView, Header, View, ViewTab};
+use crate::ui::{self, AgentRow, ContextDetail, ContextGroup, ContextPercent, ContextView, Header, View, ViewTab};
 use crate::usage::{self, Tree};
 
 const STATUS: &str = fixture!("cornercase/status-0.12.173.json");
 const SESSION: &str = fixture!("claude/2.1.306/session.jsonl");
 const BOOT: &str = "4242-1700000000000000000";
 const SESSION_ID: &str = "00000000-0000-4000-8000-000000000001";
-const LABEL: &str = "notes › main › %1";
+const LABEL: &str = "notes › main";
 
 fn process(pid: Pid, parent: Pid, pane: Option<u64>, name: &str) -> Process {
     Process {
@@ -180,7 +180,7 @@ mod viewing {
         for pane in panes.filter(|pane| pane.id == 1 && shown.is_some()) {
             pane.context_percent = shown;
         }
-        view(pane_node(&tree, 1).map(|pane| (pane, LABEL)), Some(&PaneContext { pane: 1, found }), 0)
+        view(pane_node(&tree, 1).map(|pane| (pane, LABEL)), Some(&PaneContext { pane: 1, found }), 0, &Folds::new())
     }
 
     fn part(kind: PartKind, tokens: u64) -> Part {
@@ -195,14 +195,15 @@ mod viewing {
             context: ContextView {
                 agents: vec![
                     AgentRow { label: LABEL.to_owned(), percent: Some(23.0) },
-                    AgentRow { label: "notes › feature-x › %7".to_owned(), percent: Some(7.0) },
+                    AgentRow { label: "notes › feature-x".to_owned(), percent: Some(7.0) },
                 ],
                 marked: Some(0),
+                title: format!("{LABEL} · claude opus · working"),
                 detail: session_view_showing(Found::Session(101, expected()), Some(23)),
             },
             ..View::default()
         };
-        let mut terminal = Terminal::new(TestBackend::new(90, 30)).expect("test terminal");
+        let mut terminal = Terminal::new(TestBackend::new(100, 34)).expect("test terminal");
         terminal.draw(|frame| drop(ui::render(frame, &view))).expect("draw");
         insta::assert_snapshot!(terminal.backend());
     }
@@ -216,7 +217,7 @@ mod viewing {
 
     #[test]
     fn no_agent_says_so() {
-        assert_eq!(view(None, None, 0), ContextDetail::NoAgent);
+        assert_eq!(view(None, None, 0, &Folds::new()), ContextDetail::NoAgent);
     }
 
     #[test]
@@ -225,7 +226,7 @@ mod viewing {
         let tree = tree(&sample);
         let other = PaneContext { pane: 7, found: Found::NoClaude };
         let pane = pane_node(&tree, 1).map(|pane| (pane, LABEL));
-        assert_eq!(view(pane, Some(&other), 0), ContextDetail::Reading { pane: LABEL.to_owned() });
+        assert_eq!(view(pane, Some(&other), 0, &Folds::new()), ContextDetail::Reading { pane: LABEL.to_owned() });
     }
 
     #[test]
@@ -241,10 +242,76 @@ mod viewing {
         let ContextDetail::Session(session) = session_view(Found::Session(101, breakdown)) else {
             panic!("a session view")
         };
+        let items = session.groups.iter().flat_map(|group| &group.items);
         let labels: Vec<(&str, bool)> =
-            session.fixed.iter().chain(&session.dynamic).map(|part| (part.label.as_str(), part.path)).collect();
-        assert_eq!(labels, [("AGENTS.md", true), ("/etc/hosts", true), ("$ cargo test \\ --locked", false)]);
+            session.loaded.iter().chain(items).map(|part| (part.label.as_str(), part.path)).collect();
+        assert_eq!(labels, [("AGENTS.md", true), ("/etc/hosts", true), ("cargo test \\ --locked", false)]);
         assert_eq!(session.percent, None);
+    }
+
+    fn grouped(dynamic: Vec<Part>, folds: &Folds) -> Vec<(String, bool, Vec<u64>, usize, u64)> {
+        let sample = sample(None);
+        let tree = tree(&sample);
+        let breakdown = Breakdown { total: None, fixed: Vec::new(), dynamic };
+        let found = PaneContext { pane: 1, found: Found::Session(101, breakdown) };
+        let pane = pane_node(&tree, 1).map(|pane| (pane, LABEL));
+        let ContextDetail::Session(session) = view(pane, Some(&found), 0, folds) else { panic!("a session") };
+        let item_tokens = |group: &ContextGroup| group.items.iter().map(|part| part.tokens).collect();
+        session
+            .groups
+            .iter()
+            .map(|group| (group.name.clone(), group.open, item_tokens(group), group.more, group.more_tokens))
+            .collect()
+    }
+
+    fn commands(tokens: &[u64]) -> Vec<Part> {
+        tokens.iter().enumerate().map(|(n, &tokens)| part(PartKind::Command(format!("make step{n}")), tokens)).collect()
+    }
+
+    #[test]
+    fn groups_keep_their_three_largest_parts_and_count_the_rest() {
+        let mut dynamic = commands(&[50, 40, 30, 20, 10]);
+        dynamic.push(part(PartKind::Replies, 7));
+        let expected = vec![
+            ("Commands".to_owned(), true, vec![50, 40, 30], 2, 30),
+            ("Claude's replies".to_owned(), false, vec![], 0, 0),
+        ];
+        assert_eq!(grouped(dynamic, &Folds::new()), expected);
+    }
+
+    #[test]
+    fn only_the_two_largest_groups_with_parts_start_open() {
+        let mut dynamic = commands(&[50]);
+        dynamic.push(part(PartKind::Replies, 45));
+        dynamic.push(part(PartKind::File("src/cart.rs".to_owned()), 40));
+        dynamic.push(part(PartKind::Search("checkout".to_owned()), 30));
+        let open: Vec<(String, bool)> =
+            grouped(dynamic, &Folds::new()).into_iter().map(|(name, open, ..)| (name, open)).collect();
+        let expected = [("Commands", true), ("Claude's replies", false), ("Files", true), ("Searches", false)];
+        assert_eq!(open, expected.map(|(name, open)| (name.to_owned(), open)));
+    }
+
+    #[test]
+    fn a_fold_the_user_chose_wins_over_the_default() {
+        let folds = Folds::from([(Group::Commands, false)]);
+        let groups = grouped(commands(&[50]), &folds);
+        assert!(!groups[0].1);
+        let breakdown = Breakdown { total: None, fixed: Vec::new(), dynamic: commands(&[50]) };
+        assert_eq!(states(&breakdown.groups(), &folds), [(Group::Commands, Some(false))]);
+    }
+
+    #[test]
+    fn the_loaded_parts_go_from_the_largest_down() {
+        let breakdown = Breakdown {
+            total: None,
+            fixed: vec![part(PartKind::SystemPrompt, 10), part(PartKind::Skills, 30), part(PartKind::Agents, 20)],
+            dynamic: Vec::new(),
+        };
+        let ContextDetail::Session(session) = session_view(Found::Session(101, breakdown)) else {
+            panic!("a session view")
+        };
+        let labels: Vec<&str> = session.loaded.iter().map(|part| part.label.as_str()).collect();
+        assert_eq!(labels, ["Skills", "Agents", "System prompt"]);
     }
 }
 
@@ -258,7 +325,6 @@ mod window {
     fn is_the_one_closer_to_cornercase(#[case] total: u64, #[case] shown: u16, #[case] window: u64) {
         let percent = percent(total, shown).expect("a window");
         assert_eq!(percent.window, window);
-        assert_eq!(percent.cornercase, f64::from(shown));
     }
 
     #[test]
@@ -267,14 +333,14 @@ mod window {
     }
 
     #[test]
-    fn the_session_shows_both_percentages() {
+    fn the_session_shows_the_total_over_the_window() {
         let sample = sample(None);
         let tree = tree(&sample);
         let breakdown = Breakdown { total: Some(84_000), fixed: Vec::new(), dynamic: Vec::new() };
         let found = PaneContext { pane: 1, found: Found::Session(101, breakdown) };
         let pane = pane_node(&tree, 1).map(|pane| (pane, LABEL));
-        let ContextDetail::Session(session) = view(pane, Some(&found), 0) else { panic!("a session") };
+        let ContextDetail::Session(session) = view(pane, Some(&found), 0, &Folds::new()) else { panic!("a session") };
         let percent = session.percent.expect("cornercase gives 42%");
-        assert_eq!((percent.window, percent.used, percent.cornercase), (200_000, 42.0, 42.0));
+        assert_eq!((percent.window, percent.used), (200_000, 42.0));
     }
 }

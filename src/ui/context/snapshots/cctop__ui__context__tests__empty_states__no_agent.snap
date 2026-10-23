@@ -1,10 +1,12 @@
 ---
 source: src/ui/context/tests.rs
-expression: "draw(detail, 100, 6).backend()"
+expression: "draw(detail, 100, 8).backend()"
 ---
-"╭─ Processes ─ Context ─────────╮╭─────────────────────────────────────────────────────────────────╮"
-"│▶ search-bar › %149         30%││No Claude agent in cornercase's panes.                           │"
-"│  main › %155               11%││                                                                 │"
-"│  cctop › main › %233         —││                                                                 │"
+"╭─ Processes ─ Context ─────────╮╭─ what fills this conversation ──────────────────────────────────╮"
+"│  shop › search-bar         85%││No Claude agent in cornercase's panes.                           │"
+"│▶ shop › checkout           20%││                                                                 │"
+"│  notes › main              60%││                                                                 │"
+"│  notes › drafts              —││                                                                 │"
 "│                               ││                                                                 │"
-"╰─ ↑↓ choose ───────────────────╯╰─────────────────────────────────────────────────────────────────╯"
+"│sorted by context used         ││                                                                 │"
+"╰─ ↑↓ choose agent ─────────────╯╰─ Tab view  q/Esc close ─────────────────────────────────────────╯"

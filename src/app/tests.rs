@@ -514,7 +514,7 @@ mod context_view {
     use crate::context::breakdown::{Breakdown, Estimate, Part, PartKind};
     use crate::ui::ContextDetail;
 
-    const SECOND: &str = "notes › feature-x › %7";
+    const SECOND: &str = "notes › feature-x";
 
     fn with_context(sample: Sample, context: PaneContext) -> App {
         let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
@@ -564,7 +564,7 @@ mod context_view {
         assert_eq!(app.state.agent, Some(1));
         let context = app.view().context;
         assert_eq!((context.marked, context.agents.len()), (Some(0), 2));
-        assert_eq!(context.detail, ContextDetail::Reading { pane: "notes › main › %1".to_owned() });
+        assert_eq!(context.detail, ContextDetail::Reading { pane: "notes › main".to_owned() });
     }
 
     #[test]
@@ -590,7 +590,7 @@ mod context_view {
         let (panes, asked) = mpsc::channel();
         app.panes = Some(panes);
         enter(&mut app);
-        let (x, y) = find(&draw(&mut app, 100, 30), "%7");
+        let (x, y) = find(&draw(&mut app, 100, 30), "feature-x");
         app.handle(&click(x, y), Instant::now());
         assert_eq!(app.state.agent, Some(7));
         assert_eq!(app.view().context.detail, ContextDetail::Reading { pane: SECOND.to_owned() });
@@ -646,7 +646,7 @@ mod context_view {
         enter(&mut app);
         assert_eq!(app.view().context.detail, ContextDetail::NoClaude { pane: SECOND.to_owned() });
         app.handle(&key(KeyCode::Up), Instant::now());
-        assert_eq!(app.view().context.detail, ContextDetail::Reading { pane: "notes › main › %1".to_owned() });
+        assert_eq!(app.view().context.detail, ContextDetail::Reading { pane: "notes › main".to_owned() });
         app.handle(&key(KeyCode::Tab), Instant::now());
         assert_eq!(app.view().tab, ViewTab::Processes);
         assert_eq!(app.state.selected, Some(RowId::Pane(7)));
@@ -654,8 +654,10 @@ mod context_view {
 
     #[test]
     fn the_wheel_scrolls_the_breakdown_up_to_its_end() {
-        let part = |n: u64| Part { kind: PartKind::File(format!("/f{n}")), tokens: Estimate(n) };
-        let breakdown = Breakdown { total: Some(100), fixed: Vec::new(), dynamic: (1..=10).map(part).collect() };
+        let file = |n: u64| Part { kind: PartKind::File(format!("/f{n}")), tokens: Estimate(n) };
+        let command = |n: u64| Part { kind: PartKind::Command(format!("make step{n}")), tokens: Estimate(n) };
+        let dynamic = (1..=10).map(file).chain((1..=10).map(command)).collect();
+        let breakdown = Breakdown { total: Some(110), fixed: Vec::new(), dynamic };
         let mut app =
             with_context(first_sample(Instant::now()), PaneContext { pane: 1, found: Found::Session(101, breakdown) });
         enter(&mut app);
@@ -665,6 +667,53 @@ mod context_view {
         assert_eq!(app.state.context_scroll, 3);
         draw(&mut app, 100, 30);
         assert_eq!(app.state.context_scroll, 0);
+    }
+}
+
+mod context_groups {
+    use super::*;
+    use crate::context::breakdown::{Breakdown, Estimate, Group, Part, PartKind};
+    use crate::ui::ContextDetail;
+
+    fn app() -> App {
+        let command = |n: u64| Part { kind: PartKind::Command(format!("make step{n}")), tokens: Estimate(n) };
+        let breakdown = Breakdown { total: Some(10), fixed: Vec::new(), dynamic: (1..=4).map(command).collect() };
+        let context = PaneContext { pane: 1, found: Found::Session(101, breakdown) };
+        let mut app = App::new(None, INTERVAL, Instant::now(), Box::new(FakeKiller::default()));
+        let first = Reading { context: Some(context), ..reading(first_sample(Instant::now())) };
+        app.update(Update::Reading(Ok(first)), Instant::now());
+        app.handle(&key(KeyCode::Tab), Instant::now());
+        app
+    }
+
+    fn open(app: &App) -> bool {
+        let ContextDetail::Session(session) = app.view().context.detail else { panic!("a session") };
+        session.groups[0].open
+    }
+
+    #[test]
+    fn a_click_on_a_group_folds_it_and_enter_opens_it_again() {
+        let mut app = app();
+        assert!(open(&app));
+        let (x, y) = find(&draw(&mut app, 100, 30), "Commands");
+        app.handle(&click(x, y), Instant::now());
+        assert!(!open(&app));
+        app.handle(&key(KeyCode::Enter), Instant::now());
+        assert!(open(&app));
+    }
+
+    #[test]
+    fn another_agent_starts_with_the_default_folds() {
+        let mut app = app();
+        app.state.folds.insert(Group::Commands, false);
+        app.handle(&key(KeyCode::Down), Instant::now());
+        app.handle(&key(KeyCode::Up), Instant::now());
+        assert!(open(&app));
+    }
+
+    #[test]
+    fn the_band_names_the_agent_its_model_and_status() {
+        assert_eq!(app().view().context.title, "notes › main · claude opus · working");
     }
 }
 
