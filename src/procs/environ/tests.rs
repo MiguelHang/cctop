@@ -14,8 +14,19 @@ mod environ {
             pane: Some(7),
             server: Some("x-1".to_owned()),
             claude_config_dir: Some(PathBuf::from("/home/user/.claude-work")),
+            action_of: None,
         };
         assert_eq!(parse_environ(fixture!("proc/environ").as_bytes()), expected);
+    }
+
+    #[rstest]
+    #[case::from_a_menu(b"CORNERCASE_PLUGIN_ID=cctop\0CORNERCASE_CONTEXT=pane\0", Some("cctop"))]
+    #[case::from_the_button(b"CORNERCASE_CONTEXT=button\0CORNERCASE_PLUGIN_ID=cctop\0", Some("cctop"))]
+    #[case::a_service(b"CORNERCASE_PLUGIN_ID=cctop\0", None)]
+    #[case::empty_context(b"CORNERCASE_PLUGIN_ID=cctop\0CORNERCASE_CONTEXT=\0", None)]
+    #[case::no_plugin(b"CORNERCASE_CONTEXT=pane\0", None)]
+    fn names_the_plugin_whose_action_started_the_process(#[case] bytes: &[u8], #[case] expected: Option<&str>) {
+        assert_eq!(parse_environ(bytes).action_of.as_deref(), expected);
     }
 
     #[rstest]

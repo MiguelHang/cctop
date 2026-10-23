@@ -3,7 +3,7 @@ use std::path::Path;
 
 use rstest::rstest;
 
-use super::{clicked, open_cctop, shell_quote};
+use super::{clicked, launched, open_cctop, shell_quote};
 use crate::cornercase::fake::FakeRunner;
 use crate::cornercase::{Client, Target};
 use crate::error::Error;
@@ -13,6 +13,10 @@ const STATUS: [&str; 2] = ["status", "--json"];
 const SHELLS: &str = r#"{"id": 10, "program": "zsh"}, {"id": 11, "program": "zsh", "active": true}"#;
 
 type Vars = &'static [(&'static str, &'static str)];
+
+fn env(vars: Vars) -> impl Fn(&str) -> Option<OsString> {
+    move |key| vars.iter().find(|(name, _)| *name == key).map(|(_, value)| (*value).into())
+}
 
 fn words(argv: &[&str]) -> Vec<String> {
     argv.iter().map(|word| (*word).to_owned()).collect()
@@ -135,10 +139,6 @@ mod clicked {
         ("CORNERCASE_PANE", "11"),
     ];
 
-    fn env(vars: Vars) -> impl Fn(&str) -> Option<OsString> {
-        move |key| vars.iter().find(|(name, _)| *name == key).map(|(_, value)| (*value).into())
-    }
-
     #[rstest]
     #[case::a_pane(ALL, Target::Pane(11))]
     #[case::a_tab(&ALL[..3], Target::Tab(9))]
@@ -160,6 +160,23 @@ mod clicked {
         assert!(matches!(error, Error::NotInCornercase));
         assert!(error.to_string().contains("CORNERCASE_PANE"), "{error}");
         assert!(error.to_string().contains("cornercase's menu"), "{error}");
+    }
+}
+
+mod launched {
+    use super::*;
+
+    const BUTTON: Vars = &[("CORNERCASE_CONTEXT", "button"), ("CORNERCASE_TAB", "9"), ("CORNERCASE_PANE", "11")];
+    const TAB_MENU: Vars = &[("CORNERCASE_CONTEXT", "tab"), ("CORNERCASE_PROJECT", "2"), ("CORNERCASE_TAB", "9")];
+
+    #[rstest]
+    #[case::from_the_button(BUTTON, Some(Target::Pane(11)))]
+    #[case::from_a_tab_menu(TAB_MENU, Some(Target::Tab(9)))]
+    #[case::from_the_button_with_no_project(&[("CORNERCASE_CONTEXT", "button")], None)]
+    #[case::in_a_pane_not_run_by_an_action(&[("CORNERCASE_PANE", "11")], None)]
+    #[case::with_an_empty_context(&[("CORNERCASE_CONTEXT", ""), ("CORNERCASE_PANE", "11")], None)]
+    fn starts_at_the_narrowest_place_of_an_action(#[case] vars: Vars, #[case] expected: Option<Target>) {
+        assert_eq!(launched(env(vars)), expected);
     }
 }
 

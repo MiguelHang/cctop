@@ -1,15 +1,18 @@
 use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
+use rstest::rstest;
+
 use super::{Running, STATUS_EVERY, Sampler, Update, spawn};
 use crate::app::context::fake::Counting;
 use crate::app::context::{Found, PaneContext};
 use crate::app::tests::{STATUS, fake_sampler, first_sample, process};
 use crate::cornercase::Client;
 use crate::cornercase::fake::FakeRunner;
-use crate::procs::Sample;
 use crate::procs::fake::FakeSource;
+use crate::procs::{Pid, Process, Sample};
 use crate::test_util::wait_until;
+use crate::usage;
 
 const FAST: Duration = Duration::from_millis(10);
 
@@ -64,6 +67,21 @@ mod tick {
         let mut sampler = fake_sampler();
         assert!(sampler.tick().expect("first reading").cpu.is_empty());
         assert!(!sampler.tick().expect("second reading").cpu.is_empty());
+    }
+
+    #[rstest]
+    #[case::hidden(Some(400), &[100, 101])]
+    #[case::shown_without_a_group(None, &[100, 101, 400, 401])]
+    fn hides_the_processes_of_cctops_group_from_the_tree(#[case] group: Option<Pid>, #[case] expected: &[Pid]) {
+        let mut sample = first_sample(Instant::now());
+        for (pid, parent) in [(400, 100), (401, 400)] {
+            sample.processes.push(Process { pgid: 400, ..process(pid, parent, 1, 5, 0) });
+        }
+        let runner = FakeRunner::default().answer(&["status", "--json"], STATUS);
+        let mut sampler = Sampler::new(Client::new(runner), FakeSource::new([sample])).hiding_group(group);
+        let reading = sampler.tick().expect("a reading");
+        let pane = usage::pane_processes(&reading.snapshot, &reading.sample, 1);
+        assert_eq!(pane.iter().map(|process| process.pid).collect::<Vec<_>>(), expected);
     }
 
     #[test]

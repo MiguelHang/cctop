@@ -17,9 +17,13 @@ cornercase plugin link .
 cornercase plugin enable cctop
 ```
 
-- Al activarlo (`enable`) o con `cornercase plugin list`, cornercase muestra la acción `cctop`, el servicio `watch` y los permisos `read`, `notify`, `split`, `focus`.
-- Elegir **cctop** en el menú de un pane: se abre un split a su derecha que ejecuta cctop y queda enfocado. Desde una pestaña, un workspace o un proyecto, el split sale del pane activo (de la pestaña activa, del workspace activo).
-- Repetir la acción en la misma pestaña (desde cualquier pane suyo): enfoca el split de cctop, sin abrir otro.
+- Hace falta cornercase 0.12.187 o posterior (`cornercase --version`); uno anterior rechaza el manifiesto por `min_cornercase` y lo dice en `cornercase plugin list`.
+- Al activarlo (`enable`) o con `cornercase plugin list`, cornercase muestra las acciones `cctop` y `split`, el servicio `watch` y los permisos `read`, `notify`, `split`, `focus`.
+- Aparece el botón **cctop** al pie de la columna de proyectos (con la barra de iconos, `◔`, con su nombre al pasar el ratón). Con un pane de Claude en pantalla, pulsarlo: se abre cctop en un popup del 80 % de la ventana, con el proyecto, el workspace y la pestaña de ese pane desplegados, el pane seleccionado (y plegado) y el resto plegado; `Tab` muestra el contexto de ese Claude. El ratón funciona dentro (clic, rueda, cabeceras). Desplegar el pane: ni `cctop` ni sus `cornercase status` aparecen en él.
+- `q` cierra el popup sin mensaje de error en la ventana (salida con código 0); abrirlo otra vez y cerrarlo con `Esc`: igual. Cerrarlo con la `×`: `pgrep -a cctop` ya no muestra el TUI (solo `cctop watch`).
+- Elegir **cctop** en el menú de un proyecto, un workspace, una pestaña y un pane: el popup se abre con esa fila seleccionada.
+- Elegir **cctop in a split** en el menú de un pane: se abre un split a su derecha que ejecuta cctop y queda enfocado.
+- Repetir la acción del split en la misma pestaña (desde cualquier pane suyo): enfoca el split de cctop, sin abrir otro.
 - Salir de cctop con `q` (o `Esc`): el pane se cierra sin dejar una shell. Repetir la acción: abre un split nuevo.
 - Con el binario en una ruta con espacios (`cornercase plugin link` desde una carpeta con espacio), la acción sigue abriendo cctop.
 - El servicio corre: `pgrep -a cctop` muestra un `cctop watch`, y `cornercase plugin logs cctop` no muestra errores (`cctop watch: …`).

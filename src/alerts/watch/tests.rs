@@ -113,6 +113,35 @@ mod alerting {
     }
 }
 
+mod own_actions {
+    use super::*;
+
+    fn popup(action_of: &str) -> Process {
+        Process { pid: 11, action_of: Some(action_of.to_owned()), ..node(5 * GB, 0) }
+    }
+
+    fn with_popup(start: Instant, action_of: &str) -> FakeSource {
+        let every = (0..).map(|tick| start + INTERVAL * tick);
+        let processes = |memory| vec![node(memory, 0), popup(action_of)];
+        FakeSource::new(every.zip([GB, GB]).map(|(taken, memory)| Sample { taken, processes: processes(memory) }))
+    }
+
+    #[test]
+    fn a_cctop_launched_by_its_own_action_does_not_count_in_the_pane() {
+        let runner = FakeRunner::default().answer(STATUS, &status_json());
+        run(&runner, with_popup(Instant::now(), "cctop"), 2);
+        assert_eq!(notifies(&runner), Vec::<String>::new());
+    }
+
+    #[test]
+    fn an_action_of_another_plugin_still_counts() {
+        let alert = "cctop: feat/x › claude 6.0 GB — node server.js 5.0 GB";
+        let runner = FakeRunner::default().answer(STATUS, &status_json()).answer(&["notify", "--", alert], "");
+        run(&runner, with_popup(Instant::now(), "other"), 2);
+        assert_eq!(notifies(&runner), [alert]);
+    }
+}
+
 mod failures {
     use super::*;
 

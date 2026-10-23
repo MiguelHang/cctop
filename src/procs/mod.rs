@@ -39,6 +39,7 @@ pub(crate) struct Process {
     pub(crate) pane: Option<u64>,
     pub(crate) server: Option<String>,
     pub(crate) claude_config_dir: Option<PathBuf>,
+    pub(crate) action_of: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -27,8 +27,9 @@ use view::Line;
 
 use crate::config::{self, Config, Loaded};
 use crate::context::Sessions;
-use crate::cornercase::{Client, CommandRunner};
+use crate::cornercase::{self, Client, CommandRunner};
 use crate::error::Result;
+use crate::paths;
 use crate::procs::{self, Killer};
 use crate::ui::{self, AgentRow, ContextDetail, ContextView, Graphs, Header, Hit, Hits, View, ViewTab};
 use crate::usage::{self, Tree};
@@ -40,15 +41,19 @@ const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 pub(crate) fn run_tui() -> Result<()> {
     let Loaded { config, warnings } = config::load_system();
+    let group = procs::own_group();
     let sampler = Sampler::new(Client::new(CommandRunner::from_env()), procs::system())
-        .with_contexts(Sessions::default(), std::env::var_os("HOME"));
+        .with_contexts(Sessions::default(), std::env::var_os("HOME"))
+        .hiding_group(group);
     let running = sampler::spawn(sampler, config.interval);
     let sort = Some(state::from_config(config.sort));
     let mut app = App::new(sort, config.interval, Instant::now(), Box::new(procs::Signal));
     app.notice = warnings.into_iter().next();
     app.panes = Some(running.panes);
+    app.cctop_group = group;
     app.memory_threshold = config.memory_threshold;
     app.machine = Machine { cpus: procs::cpus(), memory: procs::machine_memory() };
+    app.start = cornercase::open::launched(paths::system_env).map(RowId::from);
     let mut screen = Screen::enter()?;
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
 }
@@ -113,6 +118,8 @@ pub(crate) struct App {
     prompt: Option<Prompt>,
     killer: Box<dyn Killer>,
     cctop_group: Option<procs::Pid>,
+    start: Option<RowId>,
+    reveal: bool,
 }
 
 impl App {
@@ -137,7 +144,9 @@ impl App {
             asked: None,
             prompt: None,
             killer,
-            cctop_group: procs::own_group(),
+            cctop_group: None,
+            start: None,
+            reveal: false,
         }
     }
 
@@ -159,11 +168,22 @@ impl App {
                 self.reading = Some(reading);
                 self.error = None;
                 self.rebuild();
+                self.open_start();
                 self.history.record(&self.tree);
             }
             Err(error) => self.error = Some(error),
         }
         self.ask_context();
+    }
+
+    fn open_start(&mut self) {
+        let Some(id) = self.start.take() else { return };
+        let path = view::path(&self.tree, id);
+        let Some((_, above)) = path.split_last() else { return };
+        self.state.unfolded.extend(above.iter().copied());
+        self.state.selected = Some(id);
+        self.reveal = true;
+        self.relayout();
     }
 
     fn check_stale(&mut self, now: Instant) -> bool {
@@ -313,6 +333,11 @@ impl App {
     fn draw(&mut self, frame: &mut Frame<'_>) {
         self.state.page = ui::list_height(frame.area()).max(1);
         self.state.reconcile(&self.lines);
+        if std::mem::take(&mut self.reveal)
+            && let Some(at) = self.state.index(&self.lines)
+        {
+            self.state.select(&self.lines, at);
+        }
         self.ask_context();
         let mut view = self.view_with(self.context_view());
         let most = ui::context_scroll_max(&view, frame.area());

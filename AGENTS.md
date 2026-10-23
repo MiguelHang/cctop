@@ -75,7 +75,7 @@ By domain. Each domain is a module with its own types and tests, and knows nothi
 
 ## Plugin
 
-- `cornercase-plugin.toml` at the root: the `cctop` action in every context (runs `cctop open`, which opens cctop in a split), the `watch` service, `[download.<target>]` for Linux and macOS (x86_64, aarch64) and `[[build]]` as a fallback. The cornercase rules for plugins: `design/plugins` in cornercase's repository.
+- `cornercase-plugin.toml` at the root (`min_cornercase = "0.12.187"`, checked by `tests/manifest.rs`): the plugin's button **cctop** and the `cctop` action on it and in every menu (runs the TUI in a popup), the `split` action in the pane menu (runs `cctop open`, which opens cctop in a split), the `watch` service, `[download.<target>]` for Linux and macOS (x86_64, aarch64) and `[[build]]` as a fallback. The cornercase rules for plugins: `design/plugins` in cornercase's repository.
 - The plugin uses only cornercase's public commands. What it would need from the core (a pane's `pid` and `memory` in `status`) is noted in `design/cornercase-client.md` for a later pull request.
 
 ## Instruction files

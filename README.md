@@ -21,9 +21,11 @@ cornercase shows what the plugin runs and asks before installing. When the insta
 
 ## Use
 
-Pick **cctop** from cornercase's menu, in any project, workspace, tab or pane. It opens cctop in a split to the right of that pane (or of the active pane of that tab, workspace or project) and focuses it; when that tab already shows cctop, it focuses that one instead. Quitting cctop (`q`) closes its pane.
+Click the **cctop** button (`◔` in the icon bar), at the foot of the projects column, or pick **cctop** from cornercase's menu in any project, workspace, tab or pane. It opens cctop in a popup over the window, already pointing at the pane on screen (or at what you clicked): its path is unfolded and it is selected, so `Tab` shows its Claude's context. `q` or `Esc` closes it. It needs cornercase 0.12.187 or newer.
 
-You can also run `cctop` in any terminal while cornercase runs; it asks the server through `$CORNERCASE_BIN`, or `cornercase` on the `PATH`.
+To keep cctop open beside your work, pick **cctop in a split** from a pane's menu instead. It opens cctop in a split to the right of that pane and focuses it; when that tab already shows cctop, it focuses that one instead. Quitting cctop (`q`) closes its pane.
+
+cctop leaves itself out of the tree, so it never adds to the pane it was opened from. You can also run `cctop` in any terminal while cornercase runs; it asks the server through `$CORNERCASE_BIN`, or `cornercase` on the `PATH`.
 
 The mouse comes first: click a row to select it, its arrow to fold or unfold it, a column's header to sort by it (`Name` goes back to cornercase's order) and a view's name at the top to switch to it; right-click a process to kill it; the wheel scrolls. Keys:
 
@@ -34,7 +36,7 @@ The mouse comes first: click a row to select it, its arrow to fold or unfold it,
 | `Tab` | switch between the processes and context views |
 | `s` | change the sort: memory, CPU, cornercase's order |
 | `k` | kill the selected process or its group (asks first) |
-| `q` | quit |
+| `q`, `Esc` | quit (closes the popup) |
 
 In the kill dialog, `←` `→` or `Tab` pick `Cancel`, `Process` or `Group`, `Enter` confirms and `Esc` cancels. cctop sends `SIGTERM`, and never offers to kill itself.
 
