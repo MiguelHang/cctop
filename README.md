@@ -3,7 +3,7 @@
 A `btop` for [cornercase](https://usecornercase.dev), shipped as a cornercase plugin.
 
 - **Processes**: one view of every project, workspace (and its worktree), tab and pane of the cornercase server, with the process tree under each pane and the memory and CPU it uses, totalled at every level, under graphs of the last hour and with a memory bar and a minute of CPU per row. Panes show their agent, status and context %, and the costliest path of each pane is highlighted down to the process that weighs most. Sort by memory or CPU, fold what you do not need, and kill a runaway process or its group (it always asks first).
-- **Context**: every Claude session of the server, fullest first, and for the one you pick, what fills its context: the fixed part (`CLAUDE.md` and its imports, skills, tools, the system prompt) and the files and commands read since the last compaction, against the real total Claude reports and the % cornercase shows. Estimated numbers are marked `≈`.
+- **Context**: every Claude session of the server, fullest first, and for the one you pick, how full its context is (the real total Claude reports, its share of the window, a bar in green, yellow or red), what is loaded on every message (`CLAUDE.md` and its imports, skills, tools, the system prompt) and what fills this conversation since the last compaction, grouped into commands, files, searches, Claude's replies, your messages and the rest, each with its three largest parts. It also says how much `/compact` would free and names a single part that takes over a tenth of the conversation. The split between parts is estimated from the transcript; the total is Claude's own.
 - **Alerts**: a background service that warns with a cornercase notification when a pane's processes cross a memory threshold, or stay over a CPU threshold for a while.
 
 It runs on Linux and macOS and uses only cornercase's public commands.
@@ -31,8 +31,8 @@ The mouse comes first: click a row to select it, its arrow to fold or unfold it,
 
 | Key | Does |
 |---|---|
-| `↑` `↓`, `PgUp` `PgDn` | move the selection |
-| `Enter`, `←` `→` | fold or unfold |
+| `↑` `↓`, `PgUp` `PgDn` | move the selection (in Context, choose the agent) |
+| `Enter`, `←` `→` | fold or unfold (in Context, `Enter` opens or folds every group) |
 | `Tab` | switch between the processes and context views |
 | `s` | change the sort: memory, CPU, cornercase's order |
 | `k` | kill the selected process or its group (asks first) |

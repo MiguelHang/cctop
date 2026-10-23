@@ -78,6 +78,7 @@ pub(crate) struct Graphs {
 pub(crate) struct ContextView {
     pub(crate) agents: Vec<AgentRow>,
     pub(crate) marked: Option<usize>,
+    pub(crate) title: String,
     pub(crate) detail: ContextDetail,
 }
 
@@ -106,11 +107,10 @@ pub(crate) enum ContextDetail {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct ContextSession {
-    pub(crate) pane: String,
     pub(crate) total: Option<u64>,
     pub(crate) percent: Option<ContextPercent>,
-    pub(crate) fixed: Vec<ContextPart>,
-    pub(crate) dynamic: Vec<ContextPart>,
+    pub(crate) loaded: Vec<ContextPart>,
+    pub(crate) groups: Vec<ContextGroup>,
     pub(crate) scroll: usize,
 }
 
@@ -118,7 +118,17 @@ pub(crate) struct ContextSession {
 pub(crate) struct ContextPercent {
     pub(crate) used: f64,
     pub(crate) window: u64,
-    pub(crate) cornercase: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) struct ContextGroup {
+    pub(crate) name: String,
+    pub(crate) noun: String,
+    pub(crate) tokens: u64,
+    pub(crate) items: Vec<ContextPart>,
+    pub(crate) more: usize,
+    pub(crate) more_tokens: u64,
+    pub(crate) open: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -7,7 +7,7 @@ use super::{agents, candidate, under};
 use crate::app::state::RowId;
 use crate::app::tests::{STATUS, first_sample};
 use crate::cornercase::Snapshot;
-use crate::usage::{self, Tree};
+use crate::usage::{self, TabNode, Tree};
 
 fn tree() -> Tree {
     let snapshot = Snapshot::parse(STATUS).expect("parse the status fixture");
@@ -28,8 +28,7 @@ mod listing {
     fn lists_the_claude_panes_by_context_with_their_place() {
         let listed: Vec<_> =
             agents(&tree()).into_iter().map(|agent| (agent.pane, agent.label, agent.percent)).collect();
-        let expected =
-            [(1, "notes › main › %1".to_owned(), Some(42)), (7, "notes › feature-x › %7".to_owned(), Some(7))];
+        let expected = [(1, "notes › main".to_owned(), Some(42)), (7, "notes › feature-x".to_owned(), Some(7))];
         assert_eq!(listed, expected);
     }
 
@@ -47,6 +46,43 @@ mod listing {
         set_percent(&mut tree, 7, Some(42));
         let order: Vec<u64> = agents(&tree).iter().map(|agent| agent.pane).collect();
         assert_eq!(order, [1, 7]);
+    }
+}
+
+mod labels {
+    use super::*;
+
+    fn labels(tree: &Tree) -> Vec<String> {
+        agents(tree).into_iter().map(|agent| agent.label).collect()
+    }
+
+    fn tabs(tree: &mut Tree) -> impl Iterator<Item = &mut TabNode> {
+        tree.projects.iter_mut().flat_map(|project| &mut project.workspaces).flat_map(|w| &mut w.tabs)
+    }
+
+    #[test]
+    fn a_tab_with_its_own_name_joins_the_place() {
+        let mut tree = tree();
+        tabs(&mut tree).filter(|tab| tab.id == 3).for_each(|tab| tab.name = Some("search-bar".to_owned()));
+        assert_eq!(labels(&tree), ["notes › main", "notes › feature-x › search-bar"]);
+    }
+
+    #[rstest]
+    #[case::the_agent("claude")]
+    #[case::the_project("notes")]
+    #[case::the_workspace("feature-x")]
+    fn a_tab_named_like_its_agent_or_place_adds_nothing(#[case] name: &str) {
+        let mut tree = tree();
+        tabs(&mut tree).filter(|tab| tab.id == 3).for_each(|tab| tab.name = Some(name.to_owned()));
+        assert_eq!(labels(&tree)[1], "notes › feature-x");
+    }
+
+    #[test]
+    fn the_pane_id_only_breaks_ties() {
+        let mut tree = tree();
+        let workspaces = tree.projects.iter_mut().flat_map(|project| &mut project.workspaces);
+        workspaces.for_each(|workspace| workspace.name = Some("checkout".to_owned()));
+        assert_eq!(labels(&tree), ["notes › checkout %1", "notes › checkout %7"]);
     }
 }
 

@@ -252,6 +252,18 @@ mod styles {
         assert_ne!(buffer[(20, pane - 1)].fg, Color::Yellow);
     }
 
+    #[rstest]
+    #[case::green(42.0, Color::Green)]
+    #[case::yellow(65.0, Color::Yellow)]
+    #[case::red(90.0, Color::Red)]
+    fn the_context_column_takes_the_level_colour(#[case] context: f64, #[case] color: Color) {
+        let mut view = sample_view();
+        view.rows[4].context = Some(context);
+        let (buffer, _) = draw(&view, 120, 40);
+        let (x, y) = find(&buffer, &format!("{context:.0}%"));
+        assert_eq!(buffer[(x, y)].fg, color);
+    }
+
     #[test]
     fn the_active_tab_is_reversed() {
         let (buffer, _) = draw(&sample_view(), 100, 20);

@@ -4,6 +4,7 @@ use rstest::rstest;
 use super::{Flow, Lists, handle};
 use crate::app::state::{RowId, State};
 use crate::app::view::Line;
+use crate::context::breakdown::Group;
 use crate::ui::{Hits, Row, ViewTab};
 use crate::usage::Sort;
 
@@ -23,7 +24,12 @@ fn lines() -> Vec<Line> {
 }
 
 fn press(state: &mut State, code: KeyCode) -> Flow {
-    handle(state, &Lists { lines: &lines(), agents: &AGENTS }, &Hits::default(), &Event::Key(KeyEvent::from(code)))
+    handle(
+        state,
+        &Lists { lines: &lines(), agents: &AGENTS, groups: &[] },
+        &Hits::default(),
+        &Event::Key(KeyEvent::from(code)),
+    )
 }
 
 fn selected_at(at: usize) -> State {
@@ -111,7 +117,7 @@ mod keys {
             kind: KeyEventKind::Release,
             state: KeyEventState::NONE,
         };
-        let lists = Lists { lines: &lines(), agents: &AGENTS };
+        let lists = Lists { lines: &lines(), agents: &AGENTS, groups: &[] };
         assert_eq!(handle(&mut state, &lists, &Hits::default(), &Event::Key(release)), Flow::Continue);
     }
 }
@@ -151,11 +157,47 @@ mod choosing_an_agent {
         let mut state = in_context(None);
         handle(
             &mut state,
-            &Lists { lines: &lines(), agents: &[] },
+            &Lists { lines: &lines(), agents: &[], groups: &[] },
             &Hits::default(),
             &Event::Key(KeyEvent::from(KeyCode::Down)),
         );
         assert_eq!(state.agent, None);
+    }
+}
+
+mod folding_groups {
+    use super::*;
+
+    const GROUPS: [(Group, Option<bool>); 3] =
+        [(Group::Commands, Some(true)), (Group::Replies, None), (Group::Files, Some(false))];
+
+    fn enter(state: &mut State) {
+        let lists = Lists { lines: &lines(), agents: &AGENTS, groups: &GROUPS };
+        handle(state, &lists, &Hits::default(), &Event::Key(KeyEvent::from(KeyCode::Enter)));
+    }
+
+    #[test]
+    fn enter_opens_every_group_when_one_is_folded() {
+        let mut state = State::new(None);
+        state.tab = ViewTab::Context;
+        enter(&mut state);
+        assert_eq!(state.folds, [(Group::Commands, true), (Group::Files, true)].into());
+    }
+
+    #[test]
+    fn enter_folds_every_group_when_all_are_open() {
+        let mut state = State::new(None);
+        state.toggle_groups(&[(Group::Commands, Some(true)), (Group::Files, Some(true))]);
+        assert_eq!(state.folds, [(Group::Commands, false), (Group::Files, false)].into());
+    }
+
+    #[test]
+    fn a_group_flips_and_one_without_parts_does_not() {
+        let mut state = State::new(None);
+        state.toggle_group(&GROUPS, 0);
+        state.toggle_group(&GROUPS, 1);
+        state.toggle_group(&GROUPS, 2);
+        assert_eq!(state.folds, [(Group::Commands, false), (Group::Files, true)].into());
     }
 }
 

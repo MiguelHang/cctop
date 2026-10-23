@@ -38,12 +38,11 @@ pub(super) fn fit_start(text: &str, max: u16) -> String {
 }
 
 pub(super) fn fit_place(text: &str, max: u16) -> String {
-    let parts: Vec<&str> = text.split(PLACE).collect();
-    let last_two = parts.len().saturating_sub(2);
-    (0..last_two)
-        .map(|skip| parts[skip..].join(PLACE))
-        .find(|shown| width(shown) <= max)
-        .unwrap_or_else(|| fit_start(&parts[last_two..].join(PLACE), max))
+    if width(text) <= max {
+        return text.to_owned();
+    }
+    let rest = text.split_once(PLACE).map_or(text, |(_, rest)| rest);
+    fit_start(rest, max)
 }
 
 fn keep(characters: impl Iterator<Item = char>, max: u16) -> Vec<char> {

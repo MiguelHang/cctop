@@ -62,7 +62,7 @@ By domain. Each domain is a module with its own types and tests, and knows nothi
 
 - Mouse first, like cornercase: click selects a row, folds and unfolds it, switches views and sorts by a column; the wheel scrolls. Keys in its own pane: arrows, `Tab` (view), `s` (sort), `k` (kill, asks first), `q` (quit).
 - Killing a process always asks first, naming the process and its pane.
-- Estimated numbers show `≈`; real ones (the context total from Claude's `usage`) do not.
+- Estimated numbers show `≈`; real ones (the context total from Claude's `usage`) do not. Where one real total sits over a split that is all estimated (the Context view), a single note says so instead of a `≈` per line.
 
 ## Tests
 

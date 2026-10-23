@@ -1,6 +1,6 @@
 # 022 — Cabecera fija y un Context que se entiende
 
-- **Estado**: en curso
+- **Estado**: hecho
 - **Depende de**: 018, 021
 - **Estimación**: ~700 líneas (ui ~350, app ~150, context ~100; tests y snapshots aparte)
 

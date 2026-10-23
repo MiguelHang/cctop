@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
+use super::context::Folds;
 use super::view::Line;
 use crate::config;
+use crate::context::breakdown::Group;
 use crate::cornercase::Target;
 use crate::procs::Pid;
 use crate::ui::{self, ViewTab};
@@ -38,6 +40,7 @@ pub(crate) struct State {
     pub(super) page: usize,
     pub(super) context_scroll: usize,
     pub(super) agent: Option<u64>,
+    pub(super) folds: Folds,
 }
 
 impl State {
@@ -95,6 +98,19 @@ impl State {
             None => 0,
         };
         self.agent = agents.get(index).copied();
+    }
+
+    pub(super) fn toggle_group(&mut self, groups: &[(Group, Option<bool>)], index: usize) {
+        if let Some(&(group, Some(open))) = groups.get(index) {
+            self.folds.insert(group, !open);
+        }
+    }
+
+    pub(super) fn toggle_groups(&mut self, groups: &[(Group, Option<bool>)]) {
+        let open = groups.iter().any(|(_, open)| *open == Some(false));
+        for (group, _) in groups.iter().filter(|(_, open)| open.is_some()) {
+            self.folds.insert(*group, open);
+        }
     }
 
     pub(super) fn fold(&mut self, id: RowId, fold: bool) {
