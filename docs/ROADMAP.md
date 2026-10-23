@@ -49,6 +49,8 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 ### M6 — Tras la primera prueba del usuario (018–019)
 - 018 aspecto tipo btop (gráficas, barras, sparklines) y Context con su propia lista de agentes.
 - 019 la acción abre cctop en un split del pane y se cierra al salir, sin proyecto "cctop".
+- 020 el árbol empieza plegado.
+- 021 botón propio y cctop en un popup (cornercase ≥ 0.12.187).
 
 ## Grafo de dependencias y oleadas paralelas
 
