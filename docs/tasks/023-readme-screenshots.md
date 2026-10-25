@@ -1,6 +1,6 @@
 # 023 — Capturas en el README
 
-- **Estado**: pendiente
+- **Estado**: hecho
 - **Depende de**: 022
 - **Estimación**: ~200 líneas de script, sin cambios en `src/`
 
