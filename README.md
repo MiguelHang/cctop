@@ -2,6 +2,10 @@
 
 A `btop` for [cornercase](https://usecornercase.dev), shipped as a cornercase plugin.
 
+![The Processes view: CPU and memory graphs over a tree of projects, workspaces, tabs, panes and their processes, with a memory bar, CPU and a CPU sparkline per row, and the costliest path of a pane in yellow](docs/screenshots/processes.svg)
+
+![The Context view: how full the selected Claude session is, the list of Claude agents by context used, and what fills the conversation grouped into files, commands, searches and replies](docs/screenshots/context.svg)
+
 - **Processes**: one view of every project, workspace (and its worktree), tab and pane of the cornercase server, with the process tree under each pane and the memory and CPU it uses, totalled at every level, under graphs of the last hour and with a memory bar and a minute of CPU per row. Panes show their agent, status and context %, and the costliest path of each pane is highlighted down to the process that weighs most. Sort by memory or CPU, fold what you do not need, and kill a runaway process or its group (it always asks first).
 - **Context**: every Claude session of the server, fullest first, and for the one you pick, how full its context is (the real total Claude reports, its share of the window, a bar in green, yellow or red), what is loaded on every message (`CLAUDE.md` and its imports, skills, tools, the system prompt) and what fills this conversation since the last compaction, grouped into commands, files, searches, Claude's replies, your messages and the rest, each with its three largest parts. It also says how much `/compact` would free and names a single part that takes over a tenth of the conversation. The split between parts is estimated from the transcript; the total is Claude's own.
 - **Alerts**: a background service that warns with a cornercase notification when a pane's processes cross a memory threshold, or stay over a CPU threshold for a while.
