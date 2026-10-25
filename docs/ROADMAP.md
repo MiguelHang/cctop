@@ -52,6 +52,8 @@ Todo lo que no es UI, puro o detrás de traits, probado con fixtures:
 - 020 el árbol empieza plegado.
 - 021 botón propio y cctop en un popup (cornercase ≥ 0.12.187).
 - 022 cabecera fija en las dos vistas y un Context que se entiende (grupos, palabras claras, consejo de /compact).
+- 023 capturas en el README (sintéticas, reproducibles).
+- 024 aviso de versión nueva en la TUI (tras 0.1.0).
 
 ## Grafo de dependencias y oleadas paralelas
 
