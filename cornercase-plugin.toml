@@ -31,3 +31,18 @@ command = ["target/release/cctop", "open"]
 id = "watch"
 command = ["target/release/cctop", "watch"]
 
+[download.x86_64-unknown-linux-gnu]
+url = "https://github.com/MiguelHang/cctop/releases/download/v0.2.0/cctop-x86_64-unknown-linux-gnu.tar.gz"
+sha256 = "4d9c0542f1039d2f2deeb719213be2dc0d6da1bb0dd48caa63184727a88750f3"
+
+[download.aarch64-unknown-linux-gnu]
+url = "https://github.com/MiguelHang/cctop/releases/download/v0.2.0/cctop-aarch64-unknown-linux-gnu.tar.gz"
+sha256 = "46939e554b484acbeb62d6792a3fe37d298f0eb6d806c834d982db3ba22e56e8"
+
+[download.x86_64-apple-darwin]
+url = "https://github.com/MiguelHang/cctop/releases/download/v0.2.0/cctop-x86_64-apple-darwin.tar.gz"
+sha256 = "554d4ec83c80b7715117794a9a404d78d1e1c3cd8bfc548382a726c1579c3a22"
+
+[download.aarch64-apple-darwin]
+url = "https://github.com/MiguelHang/cctop/releases/download/v0.2.0/cctop-aarch64-apple-darwin.tar.gz"
+sha256 = "362977490135adda80c611d3c17bbb085a6e409d7e670ee955f3c692aa320667"
