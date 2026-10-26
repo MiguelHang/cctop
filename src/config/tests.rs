@@ -49,6 +49,7 @@ mod parsing {
         assert_eq!(config.cpu_sustain, Duration::from_secs(60));
         assert_eq!(config.alert_interval, Duration::from_secs(5));
         assert_eq!(config.sort, Sort::Memory);
+        assert!(config.check_updates);
     }
 
     #[test]
@@ -69,7 +70,7 @@ mod parsing {
     #[test]
     fn every_key_can_be_set() {
         let text = "interval = \"3s\"\nmemory_threshold = \"8GiB\"\ncpu_threshold = 150\n\
-                    cpu_sustain = \"2m\"\nalert_interval = \"10s\"\nsort = \"cpu\"\n";
+                    cpu_sustain = \"2m\"\nalert_interval = \"10s\"\nsort = \"cpu\"\ncheck_updates = false\n";
         let expected = Config {
             interval: Duration::from_secs(3),
             memory_threshold: 8 << 30,
@@ -77,6 +78,7 @@ mod parsing {
             cpu_sustain: Duration::from_secs(120),
             alert_interval: Duration::from_secs(10),
             sort: Sort::Cpu,
+            check_updates: false,
         };
         assert_eq!(parse(text).config, expected);
     }
@@ -106,10 +108,10 @@ mod invalid_values {
 
     #[test]
     fn warn_once_per_key() {
-        let loaded = parse("memory_threshold = \"lots\"\ncpu_threshold = -1\nsort = 3\n");
+        let loaded = parse("memory_threshold = \"lots\"\ncpu_threshold = -1\nsort = 3\ncheck_updates = \"no\"\n");
         assert_eq!(loaded.config, Config::default());
         let keys: Vec<_> = loaded.warnings.iter().filter_map(|w| w.split(' ').next()).collect();
-        assert_eq!(keys, ["memory_threshold", "cpu_threshold", "sort"]);
+        assert_eq!(keys, ["memory_threshold", "cpu_threshold", "sort", "check_updates"]);
     }
 
     #[test]

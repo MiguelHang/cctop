@@ -7,6 +7,7 @@ mod config;
 mod context;
 mod cornercase;
 mod procs;
+mod release;
 mod usage;
 
 mod app;

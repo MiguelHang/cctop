@@ -18,6 +18,7 @@ use crate::cornercase::{Client, Snapshot};
 use crate::error::Result;
 use crate::procs::fake::{FakeKiller, FakeSource};
 use crate::procs::{Pid, Process, Sample};
+use crate::release::Version;
 pub(super) use crate::test_util::find;
 use crate::test_util::fixture;
 use crate::ui::{Sort, ViewTab};
@@ -242,6 +243,19 @@ mod ticking {
         assert_eq!(app.view().header.error.as_deref(), Some("bad config"));
         app.handle(&key(KeyCode::Down), Instant::now());
         assert_eq!(app.view().header.error, None);
+    }
+
+    #[test]
+    fn a_newer_release_asks_for_one_draw_and_stays() {
+        let mut app = app_with(first_sample(Instant::now()), None);
+        let (sender, receiver) = mpsc::channel();
+        app.release = Some(receiver);
+        assert!(!app.check_release());
+        sender.send(Version::parse("0.2.0").expect("a version")).expect("send");
+        assert!(app.check_release());
+        assert!(!app.check_release());
+        app.handle(&key(KeyCode::Down), Instant::now());
+        assert_eq!(app.view().newer.as_deref(), Some("0.2.0"));
     }
 }
 

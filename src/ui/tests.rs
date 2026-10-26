@@ -74,6 +74,7 @@ fn sample_view() -> View {
             row_points: 30,
         },
         memory_threshold: 4 * GIB,
+        newer: None,
     }
 }
 
@@ -198,6 +199,44 @@ mod layout {
         assert_eq!(line(&buffer, project).chars().skip(usize::from(x)).collect::<String>().trim(), "│");
         let (_, pane) = find(&buffer, "%3 claude");
         assert!(line(&buffer, pane).ends_with("claude   working        42%│"), "{}", line(&buffer, pane));
+    }
+}
+
+mod update_notice {
+    use super::*;
+
+    fn with_update() -> View {
+        View { newer: Some("0.2.0".to_owned()), ..sample_view() }
+    }
+
+    #[test]
+    fn names_the_version_and_the_command_at_the_right_of_the_keys() {
+        let (buffer, _) = draw(&with_update(), 120, 20);
+        let bottom = line(&buffer, 19);
+        assert!(bottom.starts_with("╰─ ↑↓ move  ⏎ fold  Tab view  s sort  k kill "), "{bottom}");
+        assert!(bottom.ends_with(" 0.2.0 available · cornercase plugin update cctop ─╯"), "{bottom}");
+        let (x, y) = find(&buffer, "0.2.0 available");
+        assert_eq!(buffer[(x, y)].fg, Color::Green);
+    }
+
+    #[test]
+    fn takes_room_from_the_keys_before_it_is_cut() {
+        let (buffer, _) = draw(&with_update(), 80, 20);
+        let bottom = line(&buffer, 19);
+        assert!(bottom.starts_with("╰─ ↑↓ move  ⏎ fold ─"), "{bottom}");
+        assert!(bottom.ends_with(" 0.2.0 available · cornercase plugin update cctop ─╯"), "{bottom}");
+    }
+
+    #[test]
+    fn a_narrow_box_shows_only_the_version() {
+        let (buffer, _) = draw(&with_update(), 40, 12);
+        assert!(line(&buffer, 11).ends_with(" 0.2.0 available ─╯"), "{}", line(&buffer, 11));
+    }
+
+    #[test]
+    fn nothing_is_shown_without_a_newer_version() {
+        let (buffer, _) = draw(&sample_view(), 120, 20);
+        assert!(!line(&buffer, 19).contains("available"));
     }
 }
 

@@ -18,6 +18,7 @@ pub(super) const DURATION: Kind<Duration> =
 pub(super) const SIZE: Kind<u64> = Kind { parse: size, expected: "a size such as \"4GiB\"" };
 pub(super) const PERCENT: Kind<f64> = Kind { parse: percent, expected: "a percentage such as 300" };
 pub(super) const SORT: Kind<Sort> = Kind { parse: sort, expected: "\"memory\" or \"cpu\"" };
+pub(super) const FLAG: Kind<bool> = Kind { parse: Value::as_bool, expected: "true or false" };
 
 fn duration(value: &Value) -> Option<Duration> {
     let duration = match value {

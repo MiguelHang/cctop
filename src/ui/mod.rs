@@ -27,6 +27,8 @@ use text::width;
 use crate::format;
 
 const TAB_ROOM: u16 = 3;
+const NOTICE_ROOM: u16 = 3;
+const UPDATE: &str = "cornercase plugin update cctop";
 const TABS: [(ViewTab, &str); 2] = [(ViewTab::Processes, "Processes"), (ViewTab::Context, "Context")];
 
 pub(crate) fn render(frame: &mut Frame<'_>, view: &View) -> Hits {
@@ -64,6 +66,19 @@ pub(crate) fn list_height(area: Rect) -> usize {
 fn split(area: Rect) -> (Rect, Rect) {
     let band = graphs::height(area);
     (Rect { height: band, ..area }, Rect { y: area.y + band, height: area.height - band, ..area })
+}
+
+fn footer(buffer: &mut Buffer, area: Rect, help: &[&str], newer: Option<&str>, hits: &mut Hits) {
+    let line = panel::bottom(area);
+    let room = panel::room(line, line.x);
+    let notice = newer
+        .map(|version| [format!("{version} available · {UPDATE}"), format!("{version} available")])
+        .and_then(|texts| texts.into_iter().find(|text| width(text) <= room))
+        .unwrap_or_default();
+    let taken = if notice.is_empty() { 0 } else { width(&notice).saturating_add(NOTICE_ROOM) };
+    let help = keys(area.width.saturating_sub(taken), help);
+    panel::left(buffer, line, &[Label::new(help, Style::new())], hits);
+    panel::right(buffer, line, line.x, &Label::new(notice, Style::new().fg(Color::Green).add_modifier(Modifier::BOLD)));
 }
 
 fn keys(width: u16, items: &[&str]) -> String {

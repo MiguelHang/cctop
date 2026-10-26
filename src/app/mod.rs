@@ -33,6 +33,7 @@ use crate::cornercase::{self, Client, CommandRunner};
 use crate::error::Result;
 use crate::paths;
 use crate::procs::{self, Killer};
+use crate::release::{self, Version};
 use crate::ui::{self, AgentRow, ContextDetail, ContextView, Graphs, Header, Hit, Hits, View, ViewTab};
 use crate::usage::{self, Tree};
 
@@ -56,6 +57,9 @@ pub(crate) fn run_tui() -> Result<()> {
     app.memory_threshold = config.memory_threshold;
     app.machine = Machine { cpus: procs::cpus(), memory: procs::machine_memory() };
     app.start = cornercase::open::launched(paths::system_env).map(RowId::from);
+    app.release = paths::state_dir(paths::system_env)
+        .filter(|_| config.check_updates)
+        .map(|state| release::spawn(release::cache_file(&state)));
     let mut screen = Screen::enter()?;
     run_loop(&mut screen.terminal, &mut app, &mut Crossterm, &running.updates)
 }
@@ -77,6 +81,7 @@ where
             changed = true;
         }
         changed |= app.check_stale(Instant::now());
+        changed |= app.check_release();
         if changed {
             terminal.draw(|frame| app.draw(frame)).map_err(io::Error::other)?;
         }
@@ -122,6 +127,8 @@ pub(crate) struct App {
     cctop_group: Option<procs::Pid>,
     start: Option<RowId>,
     reveal: bool,
+    release: Option<Receiver<Version>>,
+    newer: Option<Version>,
 }
 
 impl App {
@@ -149,6 +156,8 @@ impl App {
             cctop_group: None,
             start: None,
             reveal: false,
+            release: None,
+            newer: None,
         }
     }
 
@@ -197,6 +206,13 @@ impl App {
         let changed = self.error != error;
         self.error = error;
         changed
+    }
+
+    fn check_release(&mut self) -> bool {
+        let Some(newer) = self.release.as_ref().and_then(|release| release.try_recv().ok()) else { return false };
+        self.newer = Some(newer);
+        self.release = None;
+        true
     }
 
     fn handle(&mut self, event: &Event, now: Instant) -> Flow {
@@ -343,6 +359,7 @@ impl App {
             dialog,
             graphs,
             memory_threshold,
+            newer: self.newer.map(|newer| newer.to_string()),
             ..view::view(&self.state, &self.lines, &self.history, header, context)
         }
     }

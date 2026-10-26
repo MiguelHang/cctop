@@ -11,7 +11,7 @@ use super::hits::{Hit, Hits};
 use super::panel::{self, Label};
 use super::text::{Align, fit, fit_place, put, width};
 use super::view::{AgentRow, ContextDetail, ContextSession, View, ViewTab};
-use super::{draw_tabs, keys, split, summary};
+use super::{draw_tabs, footer, split, summary};
 use crate::format;
 
 const SIDE_BY_SIDE: u16 = 70;
@@ -55,7 +55,7 @@ pub(super) fn draw(buffer: &mut Buffer, area: Rect, view: &View, compact: bool, 
     let inner = panel::draw(buffer, detail);
     draw_title(buffer, panel::top(detail), view, compact);
     let help: &[&str] = if matches!(view.context.detail, ContextDetail::Session(_)) { &HELP } else { &EMPTY_HELP };
-    panel::left(buffer, panel::bottom(detail), &[Label::new(keys(detail.width, help), Style::new())], hits);
+    footer(buffer, detail, help, view.newer.as_deref(), hits);
     let message = match &view.context.detail {
         ContextDetail::Session(session) => return conversation::draw(buffer, detail, session, hits),
         ContextDetail::NoAgent => "No Claude agent in cornercase's panes.".to_owned(),

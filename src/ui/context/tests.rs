@@ -113,6 +113,12 @@ mod layout {
     }
 
     #[test]
+    fn the_update_notice_closes_the_conversation_box_at_120_by_40() {
+        let view = View { newer: Some("0.2.0".to_owned()), ..view(ContextDetail::Session(session())) };
+        insta::assert_snapshot!(draw_view(&view, 120, 40).0.backend());
+    }
+
+    #[test]
     fn stacks_the_agents_over_the_conversation_at_40_columns() {
         insta::assert_snapshot!(draw(ContextDetail::Session(session()), 40, 24).backend());
     }

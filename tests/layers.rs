@@ -8,17 +8,18 @@ use rstest::rstest;
 
 const LEAVES: &[&str] = &["error", "format", "paths", "test_util"];
 
-const DOMAINS: &[&str] = &["cornercase", "procs", "usage", "context", "alerts", "config"];
+const DOMAINS: &[&str] = &["cornercase", "procs", "usage", "context", "alerts", "config", "release"];
 
 const RULES: &[(&str, &[&str])] = &[
     ("cornercase", &[]),
     ("procs", &[]),
     ("context", &[]),
     ("config", &[]),
+    ("release", &[]),
     ("usage", &["cornercase", "procs"]),
     ("alerts", &["cornercase", "procs", "usage", "config"]),
     ("ui", DOMAINS),
-    ("app", &["cornercase", "procs", "usage", "context", "alerts", "config", "ui"]),
+    ("app", &["cornercase", "procs", "usage", "context", "alerts", "config", "release", "ui"]),
 ];
 
 const DEPENDENCY_EXCEPTIONS: &[(&str, &str)] = &[];

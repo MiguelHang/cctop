@@ -50,6 +50,7 @@ By domain. Each domain is a module with its own types and tests, and knows nothi
 | `context/` | Claude sessions: finding a pane's session and transcript, reading the transcript incrementally, the `Breakdown` (fixed and dynamic parts, per file and command, the real total). | leaves |
 | `alerts/` | Thresholds with hysteresis (pure) and the `watch` service loop. | `cornercase`, `procs`, `usage`, `config`, leaves |
 | `config/` | `config.toml` (interval, thresholds, default sort), with defaults. | leaves |
+| `release/` | The newest release on GitHub: asking with `curl` at most once a day, its cache in the state folder, comparing versions. | leaves |
 | `ui/` | Rendering only: functions from a `View` (plain data) to ratatui widgets, and the hit areas the mouse uses. | domain types, leaves |
 | `app/` | The TUI's state, input (mouse first, then keys), the loop and the glue between domains and `ui`. Only `app` and `main.rs` use `app`. | everything |
 | leaves | `error.rs`, `format.rs` (sizes, percentages, durations), `paths.rs`. | nothing of the crate |

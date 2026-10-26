@@ -63,6 +63,7 @@ pub(crate) struct View {
     pub(crate) dialog: Option<Dialog>,
     pub(crate) graphs: Graphs,
     pub(crate) memory_threshold: u64,
+    pub(crate) newer: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

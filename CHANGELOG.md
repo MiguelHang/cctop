@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- **cctop says when a new version is out**: once a day at most, it asks GitHub for its latest release in the background, and when there is a newer one the bottom border shows `0.2.0 available · cornercase plugin update cctop` (or just the version on a narrow terminal). Without network nothing shows and nothing slows down. Turn it off with `check_updates = false` in `config.toml`.
+
 ## 0.1.0
 
 The first release: a `btop` for cornercase, as a plugin for Linux and macOS (x86_64 and aarch64).

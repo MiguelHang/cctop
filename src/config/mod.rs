@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use toml::Value;
 
-use values::{DURATION, Kind, PERCENT, SIZE, SORT};
+use values::{DURATION, FLAG, Kind, PERCENT, SIZE, SORT};
 
 use crate::paths;
 
@@ -21,6 +21,7 @@ pub(crate) struct Config {
     pub(crate) cpu_sustain: Duration,
     pub(crate) alert_interval: Duration,
     pub(crate) sort: Sort,
+    pub(crate) check_updates: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -44,6 +45,7 @@ struct Raw {
     cpu_sustain: Option<Value>,
     alert_interval: Option<Value>,
     sort: Option<Value>,
+    check_updates: Option<Value>,
 }
 
 impl Default for Config {
@@ -55,6 +57,7 @@ impl Default for Config {
             cpu_sustain: Duration::from_secs(60),
             alert_interval: Duration::from_secs(5),
             sort: Sort::Memory,
+            check_updates: true,
         }
     }
 }
@@ -103,6 +106,7 @@ impl Config {
                 &mut warnings,
             ),
             sort: setting(raw.sort, "sort", &SORT, default.sort, &mut warnings),
+            check_updates: setting(raw.check_updates, "check_updates", &FLAG, default.check_updates, &mut warnings),
         };
         Loaded { config, warnings }
     }

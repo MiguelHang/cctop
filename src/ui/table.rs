@@ -4,10 +4,10 @@ use ratatui::style::{Color, Modifier, Style};
 
 use super::chart::{bar, fill_level, heat, resample, sparkline};
 use super::hits::{Hit, Hits};
-use super::panel::{self, Label};
+use super::panel;
 use super::text::{Align, put};
 use super::view::{Row, RowKind, Sort, View, ViewTab};
-use super::{draw_tabs, keys, summary};
+use super::{draw_tabs, footer, summary};
 use crate::format;
 
 const GAP: u16 = 1;
@@ -49,7 +49,7 @@ pub(super) fn draw(buffer: &mut Buffer, area: Rect, view: &View, totals: bool, h
     let top = panel::top(area);
     let from = draw_tabs(buffer, top, ViewTab::Processes, hits);
     panel::right(buffer, top, from, &summary(view, panel::room(top, from), totals));
-    panel::left(buffer, panel::bottom(area), &[Label::new(keys(area.width, &HELP), Style::new())], hits);
+    footer(buffer, area, &HELP, view.newer.as_deref(), hits);
     if inner.height == 0 {
         return;
     }
